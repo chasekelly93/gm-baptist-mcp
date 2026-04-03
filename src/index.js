@@ -10,7 +10,7 @@ const {
   getContact, updateContact, deleteContact, addContactTags, removeContactTags, searchContacts,
   getContactNotes, addContactNote, markConversationRead, getConversation,
   getPipelines, getOpportunities, createOpportunity, updateOpportunity, deleteOpportunity,
-  getCalendars, getAppointments,
+  getCalendars, getAppointments, getUsers, getContactsByTag,
 } = require("./tools");
 
 const {
@@ -146,7 +146,7 @@ function createServer() {
     async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getContact(args), null, 2) }] })
   );
   s.tool("update_contact", "Update fields on an existing contact.",
-    { contactId: z.string(), firstName: z.string().optional(), lastName: z.string().optional(), email: z.string().optional(), phone: z.string().optional(), tags: z.array(z.string()).optional(), companyName: z.string().optional(), address1: z.string().optional(), city: z.string().optional(), state: z.string().optional(), postalCode: z.string().optional(), website: z.string().optional(), source: z.string().optional(), dnd: z.boolean().optional() },
+    { contactId: z.string(), firstName: z.string().optional(), lastName: z.string().optional(), email: z.string().optional(), phone: z.string().optional(), tags: z.array(z.string()).optional(), companyName: z.string().optional(), address1: z.string().optional(), city: z.string().optional(), state: z.string().optional(), postalCode: z.string().optional(), website: z.string().optional(), source: z.string().optional(), dnd: z.boolean().optional(), customFields: z.array(z.object({ id: z.string(), field_value: z.unknown() })).optional() },
     async (args) => ({ content: [{ type: "text", text: JSON.stringify(await updateContact(args), null, 2) }] })
   );
   s.tool("delete_contact", "Permanently delete a contact by ID.",
@@ -214,6 +214,14 @@ function createServer() {
   s.tool("get_appointments", "Get upcoming appointments for a location or calendar.",
     { locationId: z.string(), calendarId: z.string().optional(), contactId: z.string().optional(), startTime: z.string().optional(), endTime: z.string().optional() },
     async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getAppointments(args), null, 2) }] })
+  );
+  s.tool("get_users", "Get users (team members) for a location. Requires users.readonly scope.",
+    { locationId: z.string() },
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getUsers(args), null, 2) }] })
+  );
+  s.tool("get_contacts_by_tag", "Get contacts filtered by one or more tags.",
+    { locationId: z.string(), tags: z.array(z.string()), limit: z.number().int().min(1).max(100).default(20), skip: z.number().int().min(0).default(0) },
+    async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getContactsByTag(args), null, 2) }] })
   );
 
   // ── Contacts extended ──────────────────────────────────────────────────────

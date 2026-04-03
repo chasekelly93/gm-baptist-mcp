@@ -235,7 +235,7 @@ async function getContact({ contactId } = {}) {
   };
 }
 
-async function updateContact({ contactId, firstName, lastName, email, phone, tags, companyName, address1, city, state, postalCode, website, source, dnd } = {}) {
+async function updateContact({ contactId, firstName, lastName, email, phone, tags, companyName, address1, city, state, postalCode, website, source, dnd, customFields } = {}) {
   if (!contactId) throw new Error("contactId is required");
   const client = locationClient();
   const body = {};
@@ -252,8 +252,38 @@ async function updateContact({ contactId, firstName, lastName, email, phone, tag
   if (website !== undefined) body.website = website;
   if (source !== undefined) body.source = source;
   if (dnd !== undefined) body.dnd = dnd;
+  if (customFields !== undefined) body.customFields = customFields;
   const response = await client.put(`/contacts/${contactId}`, body);
   return response.data.contact || response.data;
+}
+
+async function getUsers({ locationId } = {}) {
+  if (!locationId) throw new Error("locationId is required");
+  const client = locationClient();
+  const response = await client.get("/users/", { params: { locationId } });
+  return response.data.users || response.data;
+}
+
+async function getContactsByTag({ locationId, tags, limit = 20, skip = 0 } = {}) {
+  if (!locationId) throw new Error("locationId is required");
+  if (!tags || tags.length === 0) throw new Error("at least one tag is required");
+  const client = locationClient();
+  const params = { locationId, limit, skip, tags: Array.isArray(tags) ? tags.join(",") : tags };
+  const response = await client.get("/contacts/", { params });
+  const contacts = response.data.contacts || [];
+  return {
+    total: response.data.total || contacts.length,
+    contacts: contacts.map((c) => ({
+      id: c.id,
+      firstName: c.firstName,
+      lastName: c.lastName,
+      email: c.email,
+      phone: c.phone,
+      tags: c.tags,
+      locationId: c.locationId,
+      createdAt: c.dateAdded,
+    })),
+  };
 }
 
 async function deleteContact({ contactId } = {}) {
@@ -492,5 +522,5 @@ module.exports = {
   getContact, updateContact, deleteContact, addContactTags, removeContactTags, searchContacts,
   getContactNotes, addContactNote, markConversationRead, getConversation,
   getPipelines, getOpportunities, createOpportunity, updateOpportunity, deleteOpportunity,
-  getCalendars, getAppointments,
+  getCalendars, getAppointments, getUsers, getContactsByTag,
 };
