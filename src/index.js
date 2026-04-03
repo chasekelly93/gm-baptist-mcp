@@ -67,6 +67,7 @@ app.get("/health", (_req, res) => {
 
 // MCP GET — SSE stream for existing session
 app.get("/mcp", async (req, res) => {
+  req.headers["accept"] = "application/json, text/event-stream";
   const sessionId = req.headers["mcp-session-id"];
   if (!sessionId || !sessions.has(sessionId)) {
     return res.status(400).json({ error: "Invalid or missing session ID" });
@@ -76,6 +77,7 @@ app.get("/mcp", async (req, res) => {
 
 // MCP POST — initialize or continue session
 app.post("/mcp", async (req, res) => {
+  req.headers["accept"] = "application/json, text/event-stream";
   const sessionId = req.headers["mcp-session-id"];
 
   if (sessionId && sessions.has(sessionId)) {
