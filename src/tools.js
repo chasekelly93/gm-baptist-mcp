@@ -208,4 +208,289 @@ async function getBillingCharges({ startDate, endDate, locationId, limit = 100, 
   return results;
 }
 
-module.exports = { getSubAccounts, getContacts, createContact, getConversations, sendMessage, getMessages, getBillingCharges };
+async function getContact({ contactId } = {}) {
+  if (!contactId) throw new Error("contactId is required");
+  const client = locationClient();
+  const response = await client.get(`/contacts/${contactId}`);
+  const c = response.data.contact || response.data;
+  return {
+    id: c.id,
+    firstName: c.firstName,
+    lastName: c.lastName,
+    email: c.email,
+    phone: c.phone,
+    locationId: c.locationId,
+    tags: c.tags,
+    companyName: c.companyName,
+    address1: c.address1,
+    city: c.city,
+    state: c.state,
+    country: c.country,
+    postalCode: c.postalCode,
+    website: c.website,
+    source: c.source,
+    dnd: c.dnd,
+    createdAt: c.dateAdded,
+    customFields: c.customFields,
+  };
+}
+
+async function updateContact({ contactId, firstName, lastName, email, phone, tags, companyName, address1, city, state, postalCode, website, source, dnd } = {}) {
+  if (!contactId) throw new Error("contactId is required");
+  const client = locationClient();
+  const body = {};
+  if (firstName !== undefined) body.firstName = firstName;
+  if (lastName !== undefined) body.lastName = lastName;
+  if (email !== undefined) body.email = email;
+  if (phone !== undefined) body.phone = phone;
+  if (tags !== undefined) body.tags = tags;
+  if (companyName !== undefined) body.companyName = companyName;
+  if (address1 !== undefined) body.address1 = address1;
+  if (city !== undefined) body.city = city;
+  if (state !== undefined) body.state = state;
+  if (postalCode !== undefined) body.postalCode = postalCode;
+  if (website !== undefined) body.website = website;
+  if (source !== undefined) body.source = source;
+  if (dnd !== undefined) body.dnd = dnd;
+  const response = await client.put(`/contacts/${contactId}`, body);
+  return response.data.contact || response.data;
+}
+
+async function deleteContact({ contactId } = {}) {
+  if (!contactId) throw new Error("contactId is required");
+  const client = locationClient();
+  await client.delete(`/contacts/${contactId}`);
+  return { success: true, contactId, message: `Contact ${contactId} deleted successfully` };
+}
+
+async function addContactTags({ contactId, tags } = {}) {
+  if (!contactId) throw new Error("contactId is required");
+  if (!tags || !tags.length) throw new Error("tags array is required");
+  const client = locationClient();
+  const response = await client.post(`/contacts/${contactId}/tags`, { tags });
+  return { contactId, tags: response.data.tags || tags, success: true };
+}
+
+async function removeContactTags({ contactId, tags } = {}) {
+  if (!contactId) throw new Error("contactId is required");
+  if (!tags || !tags.length) throw new Error("tags array is required");
+  const client = locationClient();
+  await client.delete(`/contacts/${contactId}/tags`, { data: { tags } });
+  return { contactId, removed: tags, success: true };
+}
+
+async function searchContacts({ locationId, query, limit = 20, skip = 0 } = {}) {
+  if (!locationId) throw new Error("locationId is required");
+  const client = locationClient();
+  const params = { locationId, limit, skip };
+  if (query) params.q = query;
+  const response = await client.get("/contacts/search", { params });
+  const contacts = response.data.contacts || [];
+  return {
+    total: response.data.total || contacts.length,
+    contacts,
+  };
+}
+
+async function getContactNotes({ contactId } = {}) {
+  if (!contactId) throw new Error("contactId is required");
+  const client = locationClient();
+  const response = await client.get(`/contacts/${contactId}/notes`);
+  const notes = response.data.notes || [];
+  return {
+    contactId,
+    total: notes.length,
+    notes: notes.map((n) => ({
+      id: n.id,
+      body: n.body,
+      userId: n.userId,
+      dateAdded: n.dateAdded,
+    })),
+  };
+}
+
+async function addContactNote({ contactId, body, userId } = {}) {
+  if (!contactId) throw new Error("contactId is required");
+  if (!body) throw new Error("body is required");
+  const client = locationClient();
+  const payload = { body };
+  if (userId) payload.userId = userId;
+  const response = await client.post(`/contacts/${contactId}/notes`, payload);
+  const note = response.data.note || response.data;
+  return {
+    id: note.id,
+    contactId,
+    body: note.body,
+    userId: note.userId,
+    dateAdded: note.dateAdded,
+  };
+}
+
+async function markConversationRead({ conversationId } = {}) {
+  if (!conversationId) throw new Error("conversationId is required");
+  const client = locationClient();
+  const response = await client.put(`/conversations/${conversationId}`, { unreadCount: 0 });
+  const conv = response.data.conversation || response.data;
+  return {
+    id: conversationId,
+    unreadCount: 0,
+    success: true,
+    message: `Conversation ${conversationId} marked as read`,
+  };
+}
+
+async function getConversation({ conversationId } = {}) {
+  if (!conversationId) throw new Error("conversationId is required");
+  const client = locationClient();
+  const response = await client.get(`/conversations/${conversationId}`);
+  const conv = response.data.conversation || response.data;
+  return {
+    id: conv.id,
+    contactId: conv.contactId,
+    locationId: conv.locationId,
+    fullName: conv.fullName,
+    email: conv.email,
+    phone: conv.phone,
+    lastMessageType: conv.lastMessageType,
+    lastMessageDate: conv.lastMessageDate,
+    unreadCount: conv.unreadCount,
+    type: conv.type,
+    status: conv.status,
+  };
+}
+
+async function getPipelines({ locationId } = {}) {
+  if (!locationId) throw new Error("locationId is required");
+  const client = locationClient();
+  const response = await client.get("/opportunities/pipelines", { params: { locationId } });
+  const pipelines = response.data.pipelines || [];
+  return {
+    total: pipelines.length,
+    pipelines: pipelines.map((p) => ({
+      id: p.id,
+      name: p.name,
+      stages: (p.stages || []).map((s) => ({ id: s.id, name: s.name, position: s.position })),
+    })),
+  };
+}
+
+async function getOpportunities({ locationId, pipelineId, pipelineStageId, status, contactId, limit = 20, skip = 0 } = {}) {
+  if (!locationId) throw new Error("locationId is required");
+  const client = locationClient();
+  const params = { location_id: locationId, limit, skip };
+  if (pipelineId) params.pipeline_id = pipelineId;
+  if (pipelineStageId) params.pipeline_stage_id = pipelineStageId;
+  if (status) params.status = status;
+  if (contactId) params.contact_id = contactId;
+  const response = await client.get("/opportunities/search", { params });
+  const opportunities = response.data.opportunities || [];
+  return {
+    total: response.data.total || opportunities.length,
+    opportunities: opportunities.map((o) => ({
+      id: o.id,
+      name: o.name,
+      pipelineId: o.pipelineId,
+      pipelineStageId: o.pipelineStageId,
+      status: o.status,
+      monetaryValue: o.monetaryValue,
+      contactId: o.contact?.id || o.contactId,
+      contactName: o.contact?.name || o.contactName,
+      assignedTo: o.assignedTo,
+      createdAt: o.createdAt,
+      updatedAt: o.updatedAt,
+    })),
+  };
+}
+
+async function createOpportunity({ locationId, pipelineId, name, pipelineStageId, status = "open", contactId, monetaryValue, assignedTo } = {}) {
+  if (!locationId) throw new Error("locationId is required");
+  if (!pipelineId) throw new Error("pipelineId is required");
+  if (!name) throw new Error("name is required");
+  const client = locationClient();
+  const body = { locationId, pipelineId, name, status };
+  if (pipelineStageId) body.pipelineStageId = pipelineStageId;
+  if (contactId) body.contactId = contactId;
+  if (monetaryValue !== undefined) body.monetaryValue = monetaryValue;
+  if (assignedTo) body.assignedTo = assignedTo;
+  const response = await client.post("/opportunities/", body);
+  return response.data.opportunity || response.data;
+}
+
+async function updateOpportunity({ opportunityId, name, pipelineStageId, status, monetaryValue, assignedTo } = {}) {
+  if (!opportunityId) throw new Error("opportunityId is required");
+  const client = locationClient();
+  const body = {};
+  if (name !== undefined) body.name = name;
+  if (pipelineStageId !== undefined) body.pipelineStageId = pipelineStageId;
+  if (status !== undefined) body.status = status;
+  if (monetaryValue !== undefined) body.monetaryValue = monetaryValue;
+  if (assignedTo !== undefined) body.assignedTo = assignedTo;
+  const response = await client.put(`/opportunities/${opportunityId}`, body);
+  return response.data.opportunity || response.data;
+}
+
+async function deleteOpportunity({ opportunityId } = {}) {
+  if (!opportunityId) throw new Error("opportunityId is required");
+  const client = locationClient();
+  await client.delete(`/opportunities/${opportunityId}`);
+  return { success: true, opportunityId, message: `Opportunity ${opportunityId} deleted successfully` };
+}
+
+async function getCalendars({ locationId } = {}) {
+  if (!locationId) throw new Error("locationId is required");
+  const client = locationClient();
+  const response = await client.get("/calendars/", { params: { locationId } });
+  const calendars = response.data.calendars || [];
+  return {
+    total: calendars.length,
+    calendars: calendars.map((c) => ({
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      slug: c.slug,
+      locationId: c.locationId,
+      calendarType: c.calendarType,
+      isActive: c.isActive,
+    })),
+  };
+}
+
+async function getAppointments({ locationId, calendarId, startTime, endTime, contactId } = {}) {
+  if (!locationId) throw new Error("locationId is required");
+  const client = locationClient();
+  const now = new Date();
+  const thirtyDaysOut = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  const params = {
+    locationId,
+    startTime: startTime || now.toISOString(),
+    endTime: endTime || thirtyDaysOut.toISOString(),
+  };
+  if (calendarId) params.calendarId = calendarId;
+  if (contactId) params.contactId = contactId;
+  const response = await client.get("/calendars/events", { params });
+  const appointments = response.data.events || response.data.appointments || [];
+  return {
+    total: appointments.length,
+    appointments: appointments.map((a) => ({
+      id: a.id,
+      title: a.title,
+      calendarId: a.calendarId,
+      contactId: a.contactId,
+      contactName: a.contactName,
+      startTime: a.startTime,
+      endTime: a.endTime,
+      status: a.appointmentStatus || a.status,
+      assignedUserId: a.assignedUserId,
+      address: a.address,
+      notes: a.notes,
+    })),
+  };
+}
+
+module.exports = {
+  getSubAccounts, getContacts, createContact, getConversations, sendMessage, getMessages, getBillingCharges,
+  getContact, updateContact, deleteContact, addContactTags, removeContactTags, searchContacts,
+  getContactNotes, addContactNote, markConversationRead, getConversation,
+  getPipelines, getOpportunities, createOpportunity, updateOpportunity, deleteOpportunity,
+  getCalendars, getAppointments,
+};
