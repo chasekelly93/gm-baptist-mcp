@@ -319,7 +319,7 @@ function createServer() {
   s.tool("delete_location_custom_value", "Delete a custom value for a location.", { locationId: z.string(), customValueId: z.string() }, async (args) => ({ content: [{ type: "text", text: JSON.stringify(await deleteLocationCustomValue(args), null, 2) }] }));
   s.tool("get_location_templates", "Get templates for a location.", { locationId: z.string(), type: z.string().optional() }, async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getLocationTemplates(args), null, 2) }] }));
   s.tool("delete_location_template", "Delete a location template.", { locationId: z.string(), templateId: z.string() }, async (args) => ({ content: [{ type: "text", text: JSON.stringify(await deleteLocationTemplate(args), null, 2) }] }));
-  s.tool("get_timezones", "Get list of available timezones.", {}, async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getTimezones(args), null, 2) }] }));
+  s.tool("get_timezones", "Get list of available timezones.", z.object({}), async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getTimezones(args), null, 2) }] }));
 
   // ── Blogs ──────────────────────────────────────────────────────────────────
   s.tool("get_blog_sites", "Get blog sites for a location.", { locationId: z.string() }, async (args) => ({ content: [{ type: "text", text: JSON.stringify(await getBlogSites(args), null, 2) }] }));
