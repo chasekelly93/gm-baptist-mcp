@@ -24,7 +24,7 @@ async function getSubAccounts({ limit = 10, skip = 0 } = {}) {
 
 async function getContacts({ locationId, limit = 20, skip = 0, query } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, limit, skip };
   if (query) params.query = query;
   const response = await client.get("/contacts/", { params });
@@ -57,7 +57,7 @@ async function createContact({
   if (!firstName && !lastName && !email && !phone) {
     throw new Error("At least one of firstName, lastName, email, or phone is required");
   }
-  const client = locationClient();
+  const client = locationClient(locationId);
   const body = { locationId };
   if (firstName) body.firstName = firstName;
   if (lastName) body.lastName = lastName;
@@ -81,7 +81,7 @@ async function createContact({
 
 async function getConversations({ locationId, limit = 20, skip = 0, contactId, status } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, limit, skip };
   if (contactId) params.contactId = contactId;
   if (status) params.status = status;
@@ -108,7 +108,7 @@ async function sendMessage({ type, locationId, contactId, conversationId, messag
   if (!contactId && !conversationId) throw new Error("Either contactId or conversationId is required");
   if (!message) throw new Error("message is required");
 
-  const client = locationClient();
+  const client = locationClient(locationId);
 
   const body = {
     type,
@@ -259,7 +259,7 @@ async function updateContact({ contactId, firstName, lastName, email, phone, tag
 
 async function getUsers({ locationId } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get("/users/", { params: { locationId } });
   return response.data.users || response.data;
 }
@@ -267,7 +267,7 @@ async function getUsers({ locationId } = {}) {
 async function getContactsByTag({ locationId, tags, limit = 20, skip = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!tags || tags.length === 0) throw new Error("at least one tag is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, limit, skip, tags: Array.isArray(tags) ? tags.join(",") : tags };
   const response = await client.get("/contacts/", { params });
   const contacts = response.data.contacts || [];
@@ -311,7 +311,7 @@ async function removeContactTags({ contactId, tags } = {}) {
 
 async function searchContacts({ locationId, query, limit = 20, skip = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, limit, skip };
   if (query) params.q = query;
   const response = await client.get("/contacts/search", { params });
@@ -391,7 +391,7 @@ async function getConversation({ conversationId } = {}) {
 
 async function getPipelines({ locationId } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get("/opportunities/pipelines", { params: { locationId } });
   const pipelines = response.data.pipelines || [];
   return {
@@ -406,7 +406,7 @@ async function getPipelines({ locationId } = {}) {
 
 async function getOpportunities({ locationId, pipelineId, pipelineStageId, status, contactId, limit = 20, skip = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { location_id: locationId, limit, skip };
   if (pipelineId) params.pipeline_id = pipelineId;
   if (pipelineStageId) params.pipeline_stage_id = pipelineStageId;
@@ -436,7 +436,7 @@ async function createOpportunity({ locationId, pipelineId, name, pipelineStageId
   if (!locationId) throw new Error("locationId is required");
   if (!pipelineId) throw new Error("pipelineId is required");
   if (!name) throw new Error("name is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const body = { locationId, pipelineId, name, status };
   if (pipelineStageId) body.pipelineStageId = pipelineStageId;
   if (contactId) body.contactId = contactId;
@@ -468,7 +468,7 @@ async function deleteOpportunity({ opportunityId } = {}) {
 
 async function getCalendars({ locationId } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get("/calendars/", { params: { locationId } });
   const calendars = response.data.calendars || [];
   return {
@@ -487,7 +487,7 @@ async function getCalendars({ locationId } = {}) {
 
 async function getAppointments({ locationId, calendarId, startTime, endTime, contactId } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const now = new Date();
   const thirtyDaysOut = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
   const params = {

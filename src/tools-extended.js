@@ -92,7 +92,7 @@ async function deleteContactNote({ contactId, noteId } = {}) {
 
 async function upsertContact({ locationId, firstName, lastName, name, email, phone, address1, city, state, country, postalCode, website, timezone, companyName, tags, customFields } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId };
   if (firstName) payload.firstName = firstName;
   if (lastName) payload.lastName = lastName;
@@ -115,7 +115,7 @@ async function upsertContact({ locationId, firstName, lastName, name, email, pho
 
 async function getDuplicateContact({ locationId, email, phone } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId };
   if (email) params.email = email;
   if (phone) params.number = phone;
@@ -222,14 +222,14 @@ async function removeContactFromWorkflow({ contactId, workflowId, eventStartTime
 async function createConversation({ locationId, contactId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!contactId) throw new Error("contactId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.post("/conversations/", { locationId, contactId });
   return response.data.conversation || response.data;
 }
 
 async function updateConversation({ conversationId, locationId, unreadCount, starred } = {}) {
   if (!conversationId) throw new Error("conversationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = {};
   if (locationId) payload.locationId = locationId;
   if (unreadCount !== undefined) payload.unreadCount = unreadCount;
@@ -310,7 +310,7 @@ async function updateMessageStatus({ messageId, status, error } = {}) {
 async function getMessageRecording({ messageId, locationId } = {}) {
   if (!messageId) throw new Error("messageId is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/conversations/messages/${messageId}/locations/${locationId}/recording`);
   return response.data;
 }
@@ -318,7 +318,7 @@ async function getMessageRecording({ messageId, locationId } = {}) {
 async function getMessageTranscription({ messageId, locationId } = {}) {
   if (!messageId) throw new Error("messageId is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/conversations/locations/${locationId}/messages/${messageId}/transcription`);
   return response.data;
 }
@@ -326,7 +326,7 @@ async function getMessageTranscription({ messageId, locationId } = {}) {
 async function downloadMessageTranscription({ messageId, locationId } = {}) {
   if (!messageId) throw new Error("messageId is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/conversations/locations/${locationId}/messages/${messageId}/transcription/download`);
   return response.data;
 }
@@ -361,7 +361,7 @@ async function upsertOpportunity({ locationId, pipelineId, name, pipelineStageId
   if (!locationId) throw new Error("locationId is required");
   if (!pipelineId) throw new Error("pipelineId is required");
   if (!name) throw new Error("name is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, pipelineId, name };
   if (pipelineStageId) payload.pipelineStageId = pipelineStageId;
   if (status) payload.status = status;
@@ -394,7 +394,7 @@ async function removeOpportunityFollowers({ opportunityId, followers } = {}) {
 
 async function getCalendarGroups({ locationId } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get("/calendars/groups", { params: { locationId } });
   return response.data;
 }
@@ -402,7 +402,7 @@ async function getCalendarGroups({ locationId } = {}) {
 async function createCalendarGroup({ locationId, name, description, slug } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!name) throw new Error("name is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, name };
   if (description) payload.description = description;
   if (slug) payload.slug = slug;
@@ -439,7 +439,7 @@ async function disableCalendarGroup({ groupId, isActive } = {}) {
 async function validateCalendarGroupSlug({ slug, locationId } = {}) {
   if (!slug) throw new Error("slug is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get("/calendars/groups/slug/validate", { params: { locationId, slug } });
   return response.data;
 }
@@ -447,7 +447,7 @@ async function validateCalendarGroupSlug({ slug, locationId } = {}) {
 async function createCalendar({ locationId, name, description, slug, calendarType, groupId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!name) throw new Error("name is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, name };
   if (description) payload.description = description;
   if (slug) payload.slug = slug;
@@ -500,7 +500,7 @@ async function getBlockedSlots({ locationId, startTime, endTime, calendarId, use
   if (!locationId) throw new Error("locationId is required");
   if (!startTime) throw new Error("startTime is required");
   if (!endTime) throw new Error("endTime is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, startTime, endTime };
   if (calendarId) params.calendarId = calendarId;
   if (userId) params.userId = userId;
@@ -513,7 +513,7 @@ async function createAppointment({ locationId, calendarId, contactId, startTime,
   if (!calendarId) throw new Error("calendarId is required");
   if (!contactId) throw new Error("contactId is required");
   if (!startTime) throw new Error("startTime is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, calendarId, contactId, startTime };
   if (endTime) payload.endTime = endTime;
   if (title) payload.title = title;
@@ -560,7 +560,7 @@ async function createBlockSlot({ locationId, calendarId, startTime, endTime, tit
   if (!locationId) throw new Error("locationId is required");
   if (!startTime) throw new Error("startTime is required");
   if (!endTime) throw new Error("endTime is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, startTime, endTime };
   if (calendarId) payload.calendarId = calendarId;
   if (title) payload.title = title;
@@ -621,7 +621,7 @@ async function deleteAppointmentNote({ appointmentId, noteId } = {}) {
 async function getCalendarResources({ resourceType, locationId, limit = 20, skip = 0 } = {}) {
   if (!resourceType) throw new Error("resourceType is required (equipments or rooms)");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/calendars/resources/${resourceType}`, { params: { locationId, limit, skip } });
   return response.data;
 }
@@ -630,7 +630,7 @@ async function createCalendarResource({ resourceType, locationId, name, descript
   if (!resourceType) throw new Error("resourceType is required (equipments or rooms)");
   if (!locationId) throw new Error("locationId is required");
   if (!name) throw new Error("name is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, name };
   if (description) payload.description = description;
   if (quantity !== undefined) payload.quantity = quantity;
@@ -724,7 +724,7 @@ async function deleteCalendarNotification({ calendarId, notificationId } = {}) {
 
 async function getLocationById({ locationId } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/locations/${locationId}`);
   return response.data;
 }
@@ -774,7 +774,7 @@ async function deleteLocation({ locationId, deleteTwilioAccount = false } = {}) 
 
 async function getLocationTags({ locationId } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/locations/${locationId}/tags`);
   return response.data;
 }
@@ -782,7 +782,7 @@ async function getLocationTags({ locationId } = {}) {
 async function createLocationTag({ locationId, name } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!name) throw new Error("name is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.post(`/locations/${locationId}/tags`, { name });
   return response.data;
 }
@@ -790,7 +790,7 @@ async function createLocationTag({ locationId, name } = {}) {
 async function getLocationTag({ locationId, tagId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!tagId) throw new Error("tagId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/locations/${locationId}/tags/${tagId}`);
   return response.data;
 }
@@ -799,7 +799,7 @@ async function updateLocationTag({ locationId, tagId, name } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!tagId) throw new Error("tagId is required");
   if (!name) throw new Error("name is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.put(`/locations/${locationId}/tags/${tagId}`, { name });
   return response.data;
 }
@@ -807,14 +807,14 @@ async function updateLocationTag({ locationId, tagId, name } = {}) {
 async function deleteLocationTag({ locationId, tagId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!tagId) throw new Error("tagId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   await client.delete(`/locations/${locationId}/tags/${tagId}`);
   return { success: true, locationId, tagId };
 }
 
 async function searchLocationTasks({ locationId, status, assignedTo, contactId, limit = 25, skip = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = {};
   if (status) payload.status = status;
   if (assignedTo) payload.assignedTo = assignedTo;
@@ -827,7 +827,7 @@ async function searchLocationTasks({ locationId, status, assignedTo, contactId, 
 
 async function getLocationCustomFields({ locationId, model } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = {};
   if (model) params.model = model;
   const response = await client.get(`/locations/${locationId}/customFields`, { params });
@@ -839,7 +839,7 @@ async function createLocationCustomField({ locationId, name, fieldKey, dataType,
   if (!name) throw new Error("name is required");
   if (!fieldKey) throw new Error("fieldKey is required");
   if (!dataType) throw new Error("dataType is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { name, fieldKey, dataType };
   if (model) payload.model = model;
   if (placeholder) payload.placeholder = placeholder;
@@ -851,7 +851,7 @@ async function createLocationCustomField({ locationId, name, fieldKey, dataType,
 async function getLocationCustomField({ locationId, customFieldId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!customFieldId) throw new Error("customFieldId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/locations/${locationId}/customFields/${customFieldId}`);
   return response.data;
 }
@@ -859,7 +859,7 @@ async function getLocationCustomField({ locationId, customFieldId } = {}) {
 async function updateLocationCustomField({ locationId, customFieldId, name, placeholder, options } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!customFieldId) throw new Error("customFieldId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = {};
   if (name) payload.name = name;
   if (placeholder) payload.placeholder = placeholder;
@@ -871,14 +871,14 @@ async function updateLocationCustomField({ locationId, customFieldId, name, plac
 async function deleteLocationCustomField({ locationId, customFieldId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!customFieldId) throw new Error("customFieldId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   await client.delete(`/locations/${locationId}/customFields/${customFieldId}`);
   return { success: true, locationId, customFieldId };
 }
 
 async function getLocationCustomValues({ locationId } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/locations/${locationId}/customValues`);
   return response.data;
 }
@@ -887,7 +887,7 @@ async function createLocationCustomValue({ locationId, name, fieldKey, value } =
   if (!locationId) throw new Error("locationId is required");
   if (!name) throw new Error("name is required");
   if (!fieldKey) throw new Error("fieldKey is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { name, fieldKey };
   if (value) payload.value = value;
   const response = await client.post(`/locations/${locationId}/customValues`, payload);
@@ -897,7 +897,7 @@ async function createLocationCustomValue({ locationId, name, fieldKey, value } =
 async function getLocationCustomValue({ locationId, customValueId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!customValueId) throw new Error("customValueId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/locations/${locationId}/customValues/${customValueId}`);
   return response.data;
 }
@@ -905,7 +905,7 @@ async function getLocationCustomValue({ locationId, customValueId } = {}) {
 async function updateLocationCustomValue({ locationId, customValueId, name, value } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!customValueId) throw new Error("customValueId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = {};
   if (name) payload.name = name;
   if (value) payload.value = value;
@@ -916,7 +916,7 @@ async function updateLocationCustomValue({ locationId, customValueId, name, valu
 async function deleteLocationCustomValue({ locationId, customValueId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!customValueId) throw new Error("customValueId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   await client.delete(`/locations/${locationId}/customValues/${customValueId}`);
   return { success: true, locationId, customValueId };
 }
@@ -924,7 +924,7 @@ async function deleteLocationCustomValue({ locationId, customValueId } = {}) {
 async function getLocationTemplates({ locationId, originId, type, deleted = false, skip = 0, limit = 25 } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!originId) throw new Error("originId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { originId, deleted, skip, limit };
   if (type) params.type = type;
   const response = await client.get(`/locations/${locationId}/templates`, { params });
@@ -934,13 +934,13 @@ async function getLocationTemplates({ locationId, originId, type, deleted = fals
 async function deleteLocationTemplate({ locationId, templateId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!templateId) throw new Error("templateId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   await client.delete(`/locations/${locationId}/templates/${templateId}`);
   return { success: true, locationId, templateId };
 }
 
 async function getTimezones({ locationId } = {}) {
-  const client = locationClient();
+  const client = locationClient(locationId);
   const endpoint = locationId ? `/locations/${locationId}/timezones` : "/locations/timezones";
   const response = await client.get(endpoint);
   return response.data;
@@ -952,7 +952,7 @@ async function getTimezones({ locationId } = {}) {
 
 async function getBlogSites({ locationId, skip = 0, limit = 10, searchTerm } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, skip, limit };
   if (searchTerm) params.searchTerm = searchTerm;
   const response = await client.get("/blogs/site/all", { params });
@@ -962,7 +962,7 @@ async function getBlogSites({ locationId, skip = 0, limit = 10, searchTerm } = {
 async function getBlogPosts({ locationId, blogId, limit = 10, offset = 0, searchTerm, status } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!blogId) throw new Error("blogId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, blogId, limit, offset };
   if (searchTerm) params.searchTerm = searchTerm;
   if (status) params.status = status;
@@ -975,7 +975,7 @@ async function createBlogPost({ locationId, blogId, title, rawHTML, imageUrl, im
   if (!blogId) throw new Error("blogId is required");
   if (!title) throw new Error("title is required");
   if (!rawHTML) throw new Error("rawHTML is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, blogId, title, rawHTML };
   if (imageUrl) payload.imageUrl = imageUrl;
   if (imageAltText) payload.imageAltText = imageAltText;
@@ -993,7 +993,7 @@ async function createBlogPost({ locationId, blogId, title, rawHTML, imageUrl, im
 async function updateBlogPost({ postId, locationId, title, rawHTML, imageUrl, imageAltText, description, author, categories, tags, urlSlug, status } = {}) {
   if (!postId) throw new Error("postId is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId };
   if (title) payload.title = title;
   if (rawHTML) payload.rawHTML = rawHTML;
@@ -1011,14 +1011,14 @@ async function updateBlogPost({ postId, locationId, title, rawHTML, imageUrl, im
 
 async function getBlogAuthors({ locationId, limit = 10, offset = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get("/blogs/authors", { params: { locationId, limit, offset } });
   return response.data;
 }
 
 async function getBlogCategories({ locationId, limit = 10, offset = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get("/blogs/categories", { params: { locationId, limit, offset } });
   return response.data;
 }
@@ -1026,7 +1026,7 @@ async function getBlogCategories({ locationId, limit = 10, offset = 0 } = {}) {
 async function checkBlogUrlSlug({ locationId, urlSlug, postId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!urlSlug) throw new Error("urlSlug is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, urlSlug };
   if (postId) params.postId = postId;
   const response = await client.get("/blogs/posts/url-slug-exists", { params });
@@ -1039,7 +1039,7 @@ async function checkBlogUrlSlug({ locationId, urlSlug, postId } = {}) {
 
 async function getEmailCampaigns({ locationId, status, limit = 10, offset = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, limit, offset };
   if (status) params.status = status;
   const response = await client.get("/emails/schedule", { params });
@@ -1050,7 +1050,7 @@ async function createEmailTemplate({ locationId, title, html, previewText, isPla
   if (!locationId) throw new Error("locationId is required");
   if (!title) throw new Error("title is required");
   if (!html) throw new Error("html is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, type: "html", title, html };
   if (previewText) payload.previewText = previewText;
   if (isPlainText !== undefined) payload.isPlainText = isPlainText;
@@ -1060,7 +1060,7 @@ async function createEmailTemplate({ locationId, title, html, previewText, isPla
 
 async function getEmailTemplates({ locationId, limit = 10, offset = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get("/emails/builder", { params: { locationId, limit, offset } });
   return response.data;
 }
@@ -1068,7 +1068,7 @@ async function getEmailTemplates({ locationId, limit = 10, offset = 0 } = {}) {
 async function updateEmailTemplate({ locationId, templateId, title, html, previewText } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!templateId) throw new Error("templateId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, templateId, editorType: "html" };
   if (title) payload.title = title;
   if (html) payload.html = html;
@@ -1080,7 +1080,7 @@ async function updateEmailTemplate({ locationId, templateId, title, html, previe
 async function deleteEmailTemplate({ locationId, templateId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!templateId) throw new Error("templateId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   await client.delete(`/emails/builder/${locationId}/${templateId}`);
   return { success: true, locationId, templateId };
 }
@@ -1093,7 +1093,7 @@ async function verifyEmail({ locationId, type, verify } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!type) throw new Error("type is required (email or contact)");
   if (!verify) throw new Error("verify is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.post("/email/verify", { type, verify }, { params: { locationId } });
   return response.data;
 }
@@ -1316,7 +1316,7 @@ async function text2payInvoice({ altId, altType = "location", contactId, currenc
 
 async function listOrders({ locationId, status, startAt, endAt, contactId, limit = 10, offset = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, limit, offset };
   if (status) params.status = status;
   if (startAt) params.startAt = startAt;
@@ -1328,7 +1328,7 @@ async function listOrders({ locationId, status, startAt, endAt, contactId, limit
 
 async function getOrder({ orderId, locationId, altId, altType } = {}) {
   if (!orderId) throw new Error("orderId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = {};
   if (locationId) params.locationId = locationId;
   if (altId) params.altId = altId;
@@ -1339,7 +1339,7 @@ async function getOrder({ orderId, locationId, altId, altType } = {}) {
 
 async function createOrderFulfillment({ orderId, locationId, trackingNumber, trackingUrl, items } = {}) {
   if (!orderId) throw new Error("orderId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = {};
   if (locationId) payload.locationId = locationId;
   if (trackingNumber) payload.trackingNumber = trackingNumber;
@@ -1351,7 +1351,7 @@ async function createOrderFulfillment({ orderId, locationId, trackingNumber, tra
 
 async function listOrderFulfillments({ orderId, locationId } = {}) {
   if (!orderId) throw new Error("orderId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = {};
   if (locationId) params.locationId = locationId;
   const response = await client.get(`/payments/orders/${orderId}/fulfillments`, { params });
@@ -1360,7 +1360,7 @@ async function listOrderFulfillments({ orderId, locationId } = {}) {
 
 async function listTransactions({ locationId, status, contactId, startAt, endAt, limit = 10, offset = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, limit, offset };
   if (status) params.status = status;
   if (contactId) params.contactId = contactId;
@@ -1372,7 +1372,7 @@ async function listTransactions({ locationId, status, contactId, startAt, endAt,
 
 async function getTransaction({ transactionId, locationId } = {}) {
   if (!transactionId) throw new Error("transactionId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = {};
   if (locationId) params.locationId = locationId;
   const response = await client.get(`/payments/transactions/${transactionId}`, { params });
@@ -1381,7 +1381,7 @@ async function getTransaction({ transactionId, locationId } = {}) {
 
 async function listSubscriptions({ locationId, status, contactId, startAt, endAt, limit = 10, offset = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, limit, offset };
   if (status) params.status = status;
   if (contactId) params.contactId = contactId;
@@ -1393,7 +1393,7 @@ async function listSubscriptions({ locationId, status, contactId, startAt, endAt
 
 async function getSubscription({ subscriptionId, locationId } = {}) {
   if (!subscriptionId) throw new Error("subscriptionId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = {};
   if (locationId) params.locationId = locationId;
   const response = await client.get(`/payments/subscriptions/${subscriptionId}`, { params });
@@ -1402,7 +1402,7 @@ async function getSubscription({ subscriptionId, locationId } = {}) {
 
 async function listCoupons({ locationId, status, search, limit = 10, offset = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, limit, offset };
   if (status) params.status = status;
   if (search) params.search = search;
@@ -1412,7 +1412,7 @@ async function listCoupons({ locationId, status, search, limit = 10, offset = 0 
 
 async function getCoupon({ locationId, couponCode } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId };
   if (couponCode) params.couponCode = couponCode;
   const response = await client.get("/payments/coupon", { params });
@@ -1423,7 +1423,7 @@ async function createCoupon({ locationId, name, code, discountType, discountValu
   if (!locationId) throw new Error("locationId is required");
   if (!name) throw new Error("name is required");
   if (!code) throw new Error("code is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, name, code };
   if (discountType) payload.discountType = discountType;
   if (discountValue !== undefined) payload.discountValue = discountValue;
@@ -1437,7 +1437,7 @@ async function createCoupon({ locationId, name, code, discountType, discountValu
 async function updateCoupon({ locationId, couponId, name, discountType, discountValue, expiryDate, maxUses } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!couponId) throw new Error("couponId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, couponId };
   if (name) payload.name = name;
   if (discountType) payload.discountType = discountType;
@@ -1451,7 +1451,7 @@ async function updateCoupon({ locationId, couponId, name, discountType, discount
 async function deleteCoupon({ locationId, couponId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!couponId) throw new Error("couponId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   await client.delete("/payments/coupon", { data: { locationId, couponId } });
   return { success: true, couponId };
 }
@@ -1463,7 +1463,7 @@ async function deleteCoupon({ locationId, couponId } = {}) {
 async function createProduct({ locationId, name, description, productType, currency, image, statementDescriptor, availableInStore } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!name) throw new Error("name is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, name };
   if (description) payload.description = description;
   if (productType) payload.productType = productType;
@@ -1478,14 +1478,14 @@ async function createProduct({ locationId, name, description, productType, curre
 async function getProduct({ productId, locationId } = {}) {
   if (!productId) throw new Error("productId is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/products/${productId}`, { params: { locationId } });
   return response.data;
 }
 
 async function updateProduct({ productId, locationId, name, description, productType, currency, image, availableInStore } = {}) {
   if (!productId) throw new Error("productId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = {};
   if (locationId) payload.locationId = locationId;
   if (name) payload.name = name;
@@ -1501,14 +1501,14 @@ async function updateProduct({ productId, locationId, name, description, product
 async function deleteProduct({ productId, locationId } = {}) {
   if (!productId) throw new Error("productId is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   await client.delete(`/products/${productId}`, { params: { locationId } });
   return { success: true, productId };
 }
 
 async function listProducts({ locationId, limit = 10, offset = 0, search, collectionIds, availableInStore } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, limit, offset };
   if (search) params.search = search;
   if (collectionIds) params.collectionIds = collectionIds;
@@ -1522,7 +1522,7 @@ async function createProductPrice({ productId, locationId, name, amount, type, c
   if (!locationId) throw new Error("locationId is required");
   if (!name) throw new Error("name is required");
   if (amount === undefined) throw new Error("amount is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, name, amount };
   if (type) payload.type = type;
   if (currency) payload.currency = currency;
@@ -1535,7 +1535,7 @@ async function createProductPrice({ productId, locationId, name, amount, type, c
 async function listProductPrices({ productId, locationId, limit = 10, offset = 0 } = {}) {
   if (!productId) throw new Error("productId is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/products/${productId}/price`, { params: { locationId, limit, offset } });
   return response.data;
 }
@@ -1544,7 +1544,7 @@ async function getProductPrice({ productId, priceId, locationId } = {}) {
   if (!productId) throw new Error("productId is required");
   if (!priceId) throw new Error("priceId is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/products/${productId}/price/${priceId}`, { params: { locationId } });
   return response.data;
 }
@@ -1552,7 +1552,7 @@ async function getProductPrice({ productId, priceId, locationId } = {}) {
 async function updateProductPrice({ productId, priceId, locationId, name, amount, currency } = {}) {
   if (!productId) throw new Error("productId is required");
   if (!priceId) throw new Error("priceId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = {};
   if (locationId) payload.locationId = locationId;
   if (name) payload.name = name;
@@ -1566,14 +1566,14 @@ async function deleteProductPrice({ productId, priceId, locationId } = {}) {
   if (!productId) throw new Error("productId is required");
   if (!priceId) throw new Error("priceId is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   await client.delete(`/products/${productId}/price/${priceId}`, { params: { locationId } });
   return { success: true, productId, priceId };
 }
 
 async function listInventory({ locationId, productId, limit = 10, offset = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, limit, offset };
   if (productId) params.productId = productId;
   const response = await client.get("/products/inventory", { params });
@@ -1583,7 +1583,7 @@ async function listInventory({ locationId, productId, limit = 10, offset = 0 } =
 async function createProductCollection({ locationId, name, slug, description, seoTitle, seoDescription } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!name) throw new Error("name is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, name };
   if (slug) payload.slug = slug;
   if (description) payload.description = description;
@@ -1595,7 +1595,7 @@ async function createProductCollection({ locationId, name, slug, description, se
 
 async function listProductCollections({ locationId, limit = 10, offset = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get("/products/collections", { params: { locationId, limit, offset } });
   return response.data;
 }
@@ -1603,14 +1603,14 @@ async function listProductCollections({ locationId, limit = 10, offset = 0 } = {
 async function deleteProductCollection({ collectionId, locationId } = {}) {
   if (!collectionId) throw new Error("collectionId is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   await client.delete(`/products/collections/${collectionId}`, { params: { locationId } });
   return { success: true, collectionId };
 }
 
 async function listProductReviews({ locationId, productId, status, limit = 10, offset = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, limit, offset };
   if (productId) params.productId = productId;
   if (status) params.status = status;
@@ -1621,7 +1621,7 @@ async function listProductReviews({ locationId, productId, status, limit = 10, o
 async function updateProductReview({ reviewId, locationId, status, reply } = {}) {
   if (!reviewId) throw new Error("reviewId is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId };
   if (status) payload.status = status;
   if (reply) payload.reply = reply;
@@ -1632,7 +1632,7 @@ async function updateProductReview({ reviewId, locationId, status, reply } = {})
 async function deleteProductReview({ reviewId, locationId } = {}) {
   if (!reviewId) throw new Error("reviewId is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   await client.delete(`/products/reviews/${reviewId}`, { params: { locationId } });
   return { success: true, reviewId };
 }
@@ -1643,7 +1643,7 @@ async function deleteProductReview({ reviewId, locationId } = {}) {
 
 async function searchSocialPosts({ locationId, skip = 0, limit = 10, accountIds, status, startDate, endDate } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { skip, limit };
   if (accountIds) payload.accountIds = accountIds;
   if (status) payload.status = status;
@@ -1657,7 +1657,7 @@ async function createSocialPost({ locationId, type, accountIds, summary, schedul
   if (!locationId) throw new Error("locationId is required");
   if (!type) throw new Error("type is required");
   if (!accountIds || !accountIds.length) throw new Error("accountIds is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { type, accountIds };
   if (summary) payload.summary = summary;
   if (scheduledAt) payload.scheduledAt = scheduledAt;
@@ -1671,7 +1671,7 @@ async function createSocialPost({ locationId, type, accountIds, summary, schedul
 async function getSocialPost({ locationId, postId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!postId) throw new Error("postId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/social-media-posting/${locationId}/posts/${postId}`);
   return response.data;
 }
@@ -1679,7 +1679,7 @@ async function getSocialPost({ locationId, postId } = {}) {
 async function updateSocialPost({ locationId, postId, summary, scheduledAt, mediaUrls, tags, categoryIds } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!postId) throw new Error("postId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = {};
   if (summary) payload.summary = summary;
   if (scheduledAt) payload.scheduledAt = scheduledAt;
@@ -1693,7 +1693,7 @@ async function updateSocialPost({ locationId, postId, summary, scheduledAt, medi
 async function deleteSocialPost({ locationId, postId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!postId) throw new Error("postId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   await client.delete(`/social-media-posting/${locationId}/posts/${postId}`);
   return { success: true, postId };
 }
@@ -1701,14 +1701,14 @@ async function deleteSocialPost({ locationId, postId } = {}) {
 async function bulkDeleteSocialPosts({ locationId, postIds } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!postIds || !postIds.length) throw new Error("postIds is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.post(`/social-media-posting/${locationId}/posts/bulk-delete`, { postIds });
   return response.data;
 }
 
 async function getSocialAccounts({ locationId } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/social-media-posting/${locationId}/accounts`);
   return response.data;
 }
@@ -1716,7 +1716,7 @@ async function getSocialAccounts({ locationId } = {}) {
 async function deleteSocialAccount({ locationId, accountId, companyId, userId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!accountId) throw new Error("accountId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = {};
   if (companyId) params.companyId = companyId;
   if (userId) params.userId = userId;
@@ -1726,7 +1726,7 @@ async function deleteSocialAccount({ locationId, accountId, companyId, userId } 
 
 async function getSocialCSVUploadStatus({ locationId, skip, limit, includeUsers, userId } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = {};
   if (skip !== undefined) params.skip = skip;
   if (limit !== undefined) params.limit = limit;
@@ -1739,7 +1739,7 @@ async function getSocialCSVUploadStatus({ locationId, skip, limit, includeUsers,
 async function getSocialCSVPosts({ locationId, csvId, skip, limit } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!csvId) throw new Error("csvId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = {};
   if (skip !== undefined) params.skip = skip;
   if (limit !== undefined) params.limit = limit;
@@ -1750,7 +1750,7 @@ async function getSocialCSVPosts({ locationId, csvId, skip, limit } = {}) {
 async function deleteSocialCSV({ locationId, csvId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!csvId) throw new Error("csvId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   await client.delete(`/social-media-posting/${locationId}/csv/${csvId}`);
   return { success: true, csvId };
 }
@@ -1759,7 +1759,7 @@ async function deleteSocialCSVPost({ locationId, csvId, postId } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!csvId) throw new Error("csvId is required");
   if (!postId) throw new Error("postId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   await client.delete(`/social-media-posting/${locationId}/csv/${csvId}/post/${postId}`);
   return { success: true, csvId, postId };
 }
@@ -1770,7 +1770,7 @@ async function deleteSocialCSVPost({ locationId, csvId, postId } = {}) {
 
 async function getSurveys({ locationId, skip = 0, limit = 50, type } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, skip, limit };
   if (type) params.type = type;
   const response = await client.get("/surveys/", { params });
@@ -1779,7 +1779,7 @@ async function getSurveys({ locationId, skip = 0, limit = 50, type } = {}) {
 
 async function getSurveySubmissions({ locationId, surveyId, page = 1, limit = 25, q, startAt, endAt } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = new URLSearchParams();
   if (page) params.append("page", page.toString());
   if (limit) params.append("limit", limit.toString());
@@ -1797,7 +1797,7 @@ async function getSurveySubmissions({ locationId, surveyId, page = 1, limit = 25
 
 async function getWorkflows({ locationId } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get("/workflows/", { params: { locationId } });
   return response.data;
 }
@@ -1843,7 +1843,7 @@ async function createCustomFieldV2({ locationId, dataType, fieldKey, objectKey, 
   if (!dataType) throw new Error("dataType is required");
   if (!fieldKey) throw new Error("fieldKey is required");
   if (!objectKey) throw new Error("objectKey is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, dataType, fieldKey, objectKey };
   if (parentId) payload.parentId = parentId;
   if (name) payload.name = name;
@@ -1856,7 +1856,7 @@ async function createCustomFieldV2({ locationId, dataType, fieldKey, objectKey, 
 
 async function updateCustomFieldV2({ id, locationId, name, placeholder, options } = {}) {
   if (!id) throw new Error("id is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = {};
   if (locationId) payload.locationId = locationId;
   if (name) payload.name = name;
@@ -1876,7 +1876,7 @@ async function deleteCustomFieldV2({ id } = {}) {
 async function getCustomFieldsV2ByObjectKey({ objectKey, locationId } = {}) {
   if (!objectKey) throw new Error("objectKey is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/custom-fields/object-key/${objectKey}`, { params: { locationId } });
   return response.data;
 }
@@ -1885,7 +1885,7 @@ async function createCustomFieldFolder({ locationId, name, objectKey } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!name) throw new Error("name is required");
   if (!objectKey) throw new Error("objectKey is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.post("/custom-fields/folder", { locationId, name, objectKey });
   return response.data;
 }
@@ -1894,7 +1894,7 @@ async function updateCustomFieldFolder({ id, locationId, name } = {}) {
   if (!id) throw new Error("id is required");
   if (!locationId) throw new Error("locationId is required");
   if (!name) throw new Error("name is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.put(`/custom-fields/folder/${id}`, { locationId, name });
   return response.data;
 }
@@ -1902,7 +1902,7 @@ async function updateCustomFieldFolder({ id, locationId, name } = {}) {
 async function deleteCustomFieldFolder({ id, locationId } = {}) {
   if (!id) throw new Error("id is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   await client.delete(`/custom-fields/folder/${id}`, { params: { locationId } });
   return { success: true, id };
 }
@@ -2091,7 +2091,7 @@ async function getStoreSetting({ altId, altType = "location" } = {}) {
 
 async function getAllAssociations({ locationId, skip = 0, limit = 25 } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get("/associations/", { params: { locationId, skip: skip.toString(), limit: limit.toString() } });
   return response.data;
 }
@@ -2101,7 +2101,7 @@ async function createAssociation({ locationId, label, key, fromObjectKey, toObje
   if (!label) throw new Error("label is required");
   if (!fromObjectKey) throw new Error("fromObjectKey is required");
   if (!toObjectKey) throw new Error("toObjectKey is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, label, fromObjectKey, toObjectKey };
   if (key) payload.key = key;
   if (reverse) payload.reverse = reverse;
@@ -2119,14 +2119,14 @@ async function getAssociationById({ associationId } = {}) {
 async function getAssociationByKey({ keyName, locationId } = {}) {
   if (!keyName) throw new Error("keyName is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get(`/associations/key/${keyName}`, { params: { locationId } });
   return response.data;
 }
 
 async function getAssociationByObjectKey({ objectKey, locationId } = {}) {
   if (!objectKey) throw new Error("objectKey is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = {};
   if (locationId) params.locationId = locationId;
   const response = await client.get(`/associations/objectKey/${objectKey}`, { params });
@@ -2155,7 +2155,7 @@ async function createRelation({ locationId, associationId, firstRecordId, second
   if (!associationId) throw new Error("associationId is required");
   if (!firstRecordId) throw new Error("firstRecordId is required");
   if (!secondRecordId) throw new Error("secondRecordId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.post("/associations/relations", { locationId, associationId, firstRecordId, secondRecordId });
   return response.data;
 }
@@ -2163,7 +2163,7 @@ async function createRelation({ locationId, associationId, firstRecordId, second
 async function getRelationsByRecord({ recordId, locationId, skip = 0, limit = 25, associationIds } = {}) {
   if (!recordId) throw new Error("recordId is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId, skip: skip.toString(), limit: limit.toString() };
   if (associationIds) params.associationIds = associationIds;
   const response = await client.get(`/associations/relations/${recordId}`, { params });
@@ -2173,7 +2173,7 @@ async function getRelationsByRecord({ recordId, locationId, skip = 0, limit = 25
 async function deleteRelation({ relationId, locationId } = {}) {
   if (!relationId) throw new Error("relationId is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   await client.delete(`/associations/relations/${relationId}`, { params: { locationId } });
   return { success: true, relationId };
 }
@@ -2184,7 +2184,7 @@ async function deleteRelation({ relationId, locationId } = {}) {
 
 async function getObjectsByLocation({ locationId } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const response = await client.get("/objects/", { params: { locationId } });
   return response.data;
 }
@@ -2192,7 +2192,7 @@ async function getObjectsByLocation({ locationId } = {}) {
 async function createObjectSchema({ locationId, labels, key, properties } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!labels) throw new Error("labels is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, labels };
   if (key) payload.key = key;
   if (properties) payload.properties = properties;
@@ -2203,7 +2203,7 @@ async function createObjectSchema({ locationId, labels, key, properties } = {}) 
 async function getObjectSchema({ key, locationId, fetchProperties } = {}) {
   if (!key) throw new Error("key is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const params = { locationId };
   if (fetchProperties !== undefined) params.fetchProperties = fetchProperties.toString();
   const response = await client.get(`/objects/${key}`, { params });
@@ -2213,7 +2213,7 @@ async function getObjectSchema({ key, locationId, fetchProperties } = {}) {
 async function updateObjectSchema({ key, locationId, labels, properties } = {}) {
   if (!key) throw new Error("key is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId };
   if (labels) payload.labels = labels;
   if (properties) payload.properties = properties;
@@ -2224,7 +2224,7 @@ async function updateObjectSchema({ key, locationId, labels, properties } = {}) 
 async function createObjectRecord({ schemaKey, locationId, properties, ownerId, followers } = {}) {
   if (!schemaKey) throw new Error("schemaKey is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId };
   if (properties) payload.properties = properties;
   if (ownerId) payload.ownerId = ownerId;
@@ -2245,7 +2245,7 @@ async function updateObjectRecord({ schemaKey, recordId, locationId, properties,
   if (!schemaKey) throw new Error("schemaKey is required");
   if (!recordId) throw new Error("recordId is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId };
   if (properties) payload.properties = properties;
   if (ownerId) payload.ownerId = ownerId;
@@ -2265,7 +2265,7 @@ async function deleteObjectRecord({ schemaKey, recordId } = {}) {
 async function searchObjectRecords({ schemaKey, locationId, query, searchAfter, limit = 25 } = {}) {
   if (!schemaKey) throw new Error("schemaKey is required");
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient();
+  const client = locationClient(locationId);
   const payload = { locationId, limit };
   if (query) payload.query = query;
   if (searchAfter) payload.searchAfter = searchAfter;
