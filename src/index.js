@@ -91,12 +91,6 @@ app.post("/mcp", async (req, res) => {
     onsessioninitialized: (id) => sessions.set(id, transport),
   });
 
-  res.on("close", () => {
-    if (transport.sessionId) sessions.delete(transport.sessionId);
-    transport.close();
-    mcpServer.close();
-  });
-
   await mcpServer.connect(transport);
   await transport.handleRequest(req, res, req.body);
 });
