@@ -13,6 +13,15 @@ const PORT = process.env.PORT || 3000;
 const app = express();
 app.use(express.json());
 
+// CORS — required for browser-based clients like Claude.ai
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
 // session ID → { transport }
 const sessions = new Map();
 
