@@ -259,8 +259,24 @@ async function updateContact({ contactId, firstName, lastName, email, phone, tag
 
 async function getUsers({ locationId } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient(); // always use location-level key for /users/ endpoint
-  const response = await client.get("/users/", { params: { locationId } });
+
+  // Always use GHL_LOCATION_API_KEY — no routing, no getApiToken
+  const token = process.env.GHL_LOCATION_API_KEY;
+  const url = "https://services.leadconnectorhq.com/users/";
+
+  console.log("[get_users] token prefix:", token ? token.slice(0, 6) : "MISSING");
+  console.log("[get_users] url:", url);
+  console.log("[get_users] locationId:", locationId);
+
+  const axios = require("axios");
+  const response = await axios.get(url, {
+    params: { locationId },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Version: "2021-07-28",
+    },
+  });
   return response.data.users || response.data;
 }
 
