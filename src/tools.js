@@ -270,15 +270,21 @@ async function getUsers({ locationId } = {}) {
   console.log("[get_users] locationId:", locationId);
 
   const axios = require("axios");
-  const response = await axios.get(url, {
-    params: { locationId },
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-      Version: "2021-07-28",
-    },
-  });
-  return response.data.users || response.data;
+  try {
+    const response = await axios.get(url, {
+      params: { locationId },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Version: "2021-07-28",
+      },
+    });
+    return response.data.users || response.data;
+  } catch (error) {
+    console.log("[get_users] GHL error status:", error.response?.status);
+    console.log("[get_users] GHL error body:", JSON.stringify(error.response?.data));
+    throw error;
+  }
 }
 
 async function getContactsByTag({ locationId, tags, limit = 20, skip = 0 } = {}) {
