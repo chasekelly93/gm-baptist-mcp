@@ -51,7 +51,7 @@ async function getAccountUsers(locationId) {
 }
 
 async function findContactByEmail(email) {
-  const { data } = await axios.get(`${BASE_URL}/contacts/search/duplicates`, {
+  const { data } = await axios.get(`${BASE_URL}/contacts/search/duplicate`, {
     headers: HEADERS_LOCATION,
     params: { locationId: PRIMARY_LOCATION_ID, email },
   });
