@@ -41,9 +41,10 @@ function isValidLocation(loc) {
 }
 
 async function getAccountUsers(locationId) {
+  const companyId = process.env.COMPANY_ID;
   const { data } = await axios.get(`${BASE_URL}/users/search`, {
     headers: HEADERS_AGENCY,
-    params: { locationId },
+    params: { companyId, locationId },
   });
   const users = data.users || [];
   return users.filter((u) => u.roles && u.roles.type === "account");
