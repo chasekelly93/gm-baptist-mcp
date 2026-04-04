@@ -494,6 +494,17 @@ function createServer() {
       return { content: [{ type: "text", text: `Error: ${msg}` }], isError: true };
     }
   };
+  s.tool("do_check_token", "Diagnostic: check if DIGITALOCEAN_API_TOKEN is set and valid (does not expose the token).", {}, async () => {
+    const token = process.env.DIGITALOCEAN_API_TOKEN;
+    if (!token) return { content: [{ type: "text", text: "DIGITALOCEAN_API_TOKEN is NOT set" }], isError: true };
+    const info = { length: token.length, prefix: token.substring(0, 4) + "...", hasWhitespace: token !== token.trim(), hasQuotes: token.includes('"') || token.includes("'") };
+    try {
+      const res = await require("axios").get("https://api.digitalocean.com/v2/account", { headers: { Authorization: `Bearer ${token.trim()}`, "Content-Type": "application/json" } });
+      info.apiStatus = res.status;
+      info.email = res.data?.account?.email;
+    } catch (e) { info.apiStatus = e.response?.status; info.apiError = e.response?.data || e.message; }
+    return { content: [{ type: "text", text: JSON.stringify(info, null, 2) }] };
+  });
   s.tool("do_list_apps", "List all DigitalOcean apps.", {}, doWrap(() => doListApps()));
   s.tool("do_get_app", "Get details of a DigitalOcean app including deploy status.", { appId: z.string() }, doWrap(doGetApp));
   s.tool("do_list_deployments", "List recent deployments for a DigitalOcean app.", { appId: z.string(), limit: z.number().int().min(1).max(50).default(10) }, doWrap(doListDeployments));
