@@ -471,6 +471,13 @@ function createServer() {
   s.tool("delete_object_record", "Delete a custom object record.", { locationId: z.string(), schemaId: z.string(), recordId: z.string() }, async (args) => ({ content: [{ type: "text", text: JSON.stringify(await deleteObjectRecord(args), null, 2) }] }));
   s.tool("search_object_records", "Search records in a custom object.", { locationId: z.string(), schemaId: z.string(), query: z.string().optional() }, async (args) => ({ content: [{ type: "text", text: JSON.stringify(await searchObjectRecords(args), null, 2) }] }));
 
+  s.tool("run_sync", "Sync staff team URLs to contact custom fields. Loops through all GHL sub-accounts and writes the staff team URL to the GHL Location ID custom field on the matching contact in the primary location.", {},
+    async () => {
+      runSync().catch((err) => console.error("[sync] fatal:", err.message));
+      return { content: [{ type: "text", text: JSON.stringify({ message: "Sync started", timestamp: new Date().toISOString() }) }] };
+    }
+  );
+
   return s;
 }
 
