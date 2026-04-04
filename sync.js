@@ -59,11 +59,10 @@ async function findContactByEmail(email) {
 }
 
 async function updateContactCustomField(contactId, locationId) {
-  const url = `https://app.gmbaptistoutreach.com/v2/location/${locationId}/settings/staff/team`;
   await axios.put(
     `${BASE_URL}/contacts/${contactId}`,
     {
-      customFields: [{ id: CUSTOM_FIELD_ID, field_value: url }],
+      customFields: [{ id: CUSTOM_FIELD_ID, field_value: locationId }],
     },
     { headers: HEADERS_LOCATION }
   );
