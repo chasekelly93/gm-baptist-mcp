@@ -4,6 +4,7 @@ const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
 const { StreamableHTTPServerTransport } = require("@modelcontextprotocol/sdk/server/streamableHttp.js");
 const express = require("express");
 const { randomUUID } = require("node:crypto");
+const { runSync } = require("../sync");
 const { z } = require("zod");
 const {
   getSubAccounts, getContacts, createContact, getConversations, sendMessage, getMessages, getBillingCharges,
@@ -472,6 +473,12 @@ function createServer() {
 
   return s;
 }
+
+// Manual sync trigger
+app.post("/sync", async (_req, res) => {
+  res.json({ message: "Sync started", timestamp: new Date().toISOString() });
+  runSync().catch((err) => console.error("[sync] fatal:", err.message));
+});
 
 // Health check
 app.get("/health", (_req, res) => {
