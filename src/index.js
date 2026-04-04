@@ -487,15 +487,22 @@ function createServer() {
   );
 
   // ── DigitalOcean App Platform ─────────────────────────────────────────────
-  s.tool("do_list_apps", "List all DigitalOcean apps.", {}, async () => ({ content: [{ type: "text", text: JSON.stringify(await doListApps(), null, 2) }] }));
-  s.tool("do_get_app", "Get details of a DigitalOcean app including deploy status.", { appId: z.string() }, async (args) => ({ content: [{ type: "text", text: JSON.stringify(await doGetApp(args), null, 2) }] }));
-  s.tool("do_list_deployments", "List recent deployments for a DigitalOcean app.", { appId: z.string(), limit: z.number().int().min(1).max(50).default(10) }, async (args) => ({ content: [{ type: "text", text: JSON.stringify(await doListDeployments(args), null, 2) }] }));
-  s.tool("do_get_deployment", "Get details of a specific deployment.", { appId: z.string(), deploymentId: z.string() }, async (args) => ({ content: [{ type: "text", text: JSON.stringify(await doGetDeployment(args), null, 2) }] }));
-  s.tool("do_create_deployment", "Trigger a new deployment (redeploy) for a DigitalOcean app.", { appId: z.string(), forceBuild: z.boolean().default(false) }, async (args) => ({ content: [{ type: "text", text: JSON.stringify(await doCreateDeployment(args), null, 2) }] }));
-  s.tool("do_get_deployment_logs", "Get build or deploy logs for a deployment.", { appId: z.string(), deploymentId: z.string(), component: z.string(), logType: z.enum(["BUILD", "DEPLOY", "RUN"]).default("BUILD") }, async (args) => ({ content: [{ type: "text", text: JSON.stringify(await doGetDeploymentLogs(args), null, 2) }] }));
-  s.tool("do_get_app_logs", "Get runtime logs for a running DigitalOcean app.", { appId: z.string(), component: z.string(), logType: z.enum(["BUILD", "DEPLOY", "RUN"]).default("RUN") }, async (args) => ({ content: [{ type: "text", text: JSON.stringify(await doGetAppLogs(args), null, 2) }] }));
-  s.tool("do_cancel_deployment", "Cancel an in-progress deployment.", { appId: z.string(), deploymentId: z.string() }, async (args) => ({ content: [{ type: "text", text: JSON.stringify(await doCancelDeployment(args), null, 2) }] }));
-  s.tool("do_restart_app", "Force restart a DigitalOcean app (triggers a force rebuild).", { appId: z.string() }, async (args) => ({ content: [{ type: "text", text: JSON.stringify(await doRestartApp(args), null, 2) }] }));
+  const doWrap = (fn) => async (args) => {
+    try { return { content: [{ type: "text", text: JSON.stringify(await fn(args), null, 2) }] }; }
+    catch (e) {
+      const msg = e.response ? `DO API ${e.response.status}: ${JSON.stringify(e.response.data)}` : e.message;
+      return { content: [{ type: "text", text: `Error: ${msg}` }], isError: true };
+    }
+  };
+  s.tool("do_list_apps", "List all DigitalOcean apps.", {}, doWrap(() => doListApps()));
+  s.tool("do_get_app", "Get details of a DigitalOcean app including deploy status.", { appId: z.string() }, doWrap(doGetApp));
+  s.tool("do_list_deployments", "List recent deployments for a DigitalOcean app.", { appId: z.string(), limit: z.number().int().min(1).max(50).default(10) }, doWrap(doListDeployments));
+  s.tool("do_get_deployment", "Get details of a specific deployment.", { appId: z.string(), deploymentId: z.string() }, doWrap(doGetDeployment));
+  s.tool("do_create_deployment", "Trigger a new deployment (redeploy) for a DigitalOcean app.", { appId: z.string(), forceBuild: z.boolean().default(false) }, doWrap(doCreateDeployment));
+  s.tool("do_get_deployment_logs", "Get build or deploy logs for a deployment.", { appId: z.string(), deploymentId: z.string(), component: z.string(), logType: z.enum(["BUILD", "DEPLOY", "RUN"]).default("BUILD") }, doWrap(doGetDeploymentLogs));
+  s.tool("do_get_app_logs", "Get runtime logs for a running DigitalOcean app.", { appId: z.string(), component: z.string(), logType: z.enum(["BUILD", "DEPLOY", "RUN"]).default("RUN") }, doWrap(doGetAppLogs));
+  s.tool("do_cancel_deployment", "Cancel an in-progress deployment.", { appId: z.string(), deploymentId: z.string() }, doWrap(doCancelDeployment));
+  s.tool("do_restart_app", "Force restart a DigitalOcean app (triggers a force rebuild).", { appId: z.string() }, doWrap(doRestartApp));
 
   return s;
 }
