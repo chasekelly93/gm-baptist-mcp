@@ -1838,15 +1838,15 @@ async function getCustomFieldV2ById({ id } = {}) {
   return response.data;
 }
 
-async function createCustomFieldV2({ locationId, dataType, fieldKey, objectKey, parentId, name, placeholder, isRequired, options } = {}) {
+async function createCustomFieldV2({ locationId, dataType, objectKey, parentId, name, placeholder, isRequired, options } = {}) {
   if (!locationId) throw new Error("locationId is required");
+  if (!name) throw new Error("name is required");
   if (!dataType) throw new Error("dataType is required");
-  if (!fieldKey) throw new Error("fieldKey is required");
   if (!objectKey) throw new Error("objectKey is required");
+  const fieldKey = `contact.${name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '')}`;
   const client = locationClient(locationId);
-  const payload = { locationId, dataType, fieldKey, objectKey };
+  const payload = { locationId, dataType, fieldKey, objectKey, name };
   if (parentId) payload.parentId = parentId;
-  if (name) payload.name = name;
   if (placeholder) payload.placeholder = placeholder;
   if (isRequired !== undefined) payload.isRequired = isRequired;
   if (options) payload.options = options;
