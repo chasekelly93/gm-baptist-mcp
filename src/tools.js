@@ -260,9 +260,10 @@ async function updateContact({ contactId, firstName, lastName, email, phone, tag
 async function getUsers({ locationId } = {}) {
   if (!locationId) throw new Error("locationId is required");
 
-  // Always use GHL_LOCATION_API_KEY — no routing, no getApiToken
-  const token = process.env.GHL_LOCATION_API_KEY;
-  const url = "https://services.leadconnectorhq.com/users/";
+  // GET /users/search accepts agency-level token and supports locationId filter.
+  // GET /users/ is location-token-only and does not work with the agency key.
+  const token = process.env.GHL_API_KEY;
+  const url = "https://services.leadconnectorhq.com/users/search";
 
   console.log("[get_users] token prefix:", token ? token.slice(0, 6) : "MISSING");
   console.log("[get_users] url:", url);
