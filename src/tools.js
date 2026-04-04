@@ -286,7 +286,12 @@ async function getContactsByTag({ locationId, tags, limit = 20, skip = 0 } = {})
   if (!locationId) throw new Error("locationId is required");
   if (!tags || tags.length === 0) throw new Error("at least one tag is required");
   const client = locationClient(locationId);
-  const params = { locationId, limit, skip, tags: Array.isArray(tags) ? tags.join(",") : tags };
+  const tagList = Array.isArray(tags) ? tags : [tags];
+  const params = new URLSearchParams();
+  params.append("locationId", locationId);
+  params.append("limit", String(limit));
+  params.append("skip", String(skip));
+  tagList.forEach((t) => params.append("tags[]", t));
   const response = await client.get("/contacts/", { params });
   const contacts = response.data.contacts || [];
   return {
