@@ -1850,8 +1850,14 @@ async function createCustomFieldV2({ locationId, dataType, objectKey, parentId, 
   if (placeholder) payload.placeholder = placeholder;
   if (isRequired !== undefined) payload.isRequired = isRequired;
   if (options) payload.options = options;
-  const response = await client.post("/custom-fields/", payload);
-  return response.data;
+  console.log("[create_custom_field_v2] request body:", JSON.stringify(payload));
+  try {
+    const response = await client.post("/custom-fields/", payload);
+    return response.data;
+  } catch (error) {
+    console.log("[create_custom_field_v2] error:", error?.response?.status, JSON.stringify(error?.response?.data));
+    throw error;
+  }
 }
 
 async function updateCustomFieldV2({ id, locationId, name, placeholder, options } = {}) {
