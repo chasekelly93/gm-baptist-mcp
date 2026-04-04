@@ -260,15 +260,26 @@ async function updateContact({ contactId, firstName, lastName, email, phone, tag
 async function getUsers({ locationId } = {}) {
   if (!locationId) throw new Error("locationId is required");
 
-  // GET /users/search requires agency token + companyId + locationId
-  const client = agencyClient();
   const companyId = process.env.COMPANY_ID;
+  const agencyToken = process.env.GHL_API_KEY;
+  console.log("[get_users] locationId:", locationId);
+  console.log("[get_users] companyId:", companyId ? companyId.slice(0, 6) + "..." : "MISSING");
+  console.log("[get_users] agencyToken:", agencyToken ? agencyToken.slice(0, 6) + "..." : "MISSING");
+
   if (!companyId) throw new Error("COMPANY_ID environment variable is not set");
 
-  const response = await client.get("/users/search", {
-    params: { companyId, locationId },
-  });
-  return response.data.users || response.data;
+  const client = agencyClient();
+  try {
+    const response = await client.get("/users/search", {
+      params: { companyId, locationId },
+    });
+    console.log("[get_users] SUCCESS, user count:", (response.data.users || []).length);
+    return response.data.users || response.data;
+  } catch (error) {
+    console.log("[get_users] GHL error status:", error.response?.status);
+    console.log("[get_users] GHL error body:", JSON.stringify(error.response?.data));
+    throw error;
+  }
 }
 
 async function getContactsByTag({ locationId, tags, limit = 20, skip = 0 } = {}) {
