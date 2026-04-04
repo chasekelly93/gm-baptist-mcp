@@ -260,31 +260,15 @@ async function updateContact({ contactId, firstName, lastName, email, phone, tag
 async function getUsers({ locationId } = {}) {
   if (!locationId) throw new Error("locationId is required");
 
-  // GET /users/search accepts agency-level token and supports locationId filter.
-  // GET /users/ is location-token-only and does not work with the agency key.
-  const token = process.env.GHL_API_KEY;
-  const url = "https://services.leadconnectorhq.com/users/search";
+  // GET /users/search requires agency token + companyId + locationId
+  const client = agencyClient();
+  const companyId = process.env.COMPANY_ID;
+  if (!companyId) throw new Error("COMPANY_ID environment variable is not set");
 
-  console.log("[get_users] token prefix:", token ? token.slice(0, 6) : "MISSING");
-  console.log("[get_users] url:", url);
-  console.log("[get_users] locationId:", locationId);
-
-  const axios = require("axios");
-  try {
-    const response = await axios.get(url, {
-      params: { locationId },
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        Version: "2021-07-28",
-      },
-    });
-    return response.data.users || response.data;
-  } catch (error) {
-    console.log("[get_users] GHL error status:", error.response?.status);
-    console.log("[get_users] GHL error body:", JSON.stringify(error.response?.data));
-    throw error;
-  }
+  const response = await client.get("/users/search", {
+    params: { companyId, locationId },
+  });
+  return response.data.users || response.data;
 }
 
 async function getContactsByTag({ locationId, tags, limit = 20, skip = 0 } = {}) {
