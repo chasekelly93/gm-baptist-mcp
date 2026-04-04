@@ -259,7 +259,7 @@ async function updateContact({ contactId, firstName, lastName, email, phone, tag
 
 async function getUsers({ locationId } = {}) {
   if (!locationId) throw new Error("locationId is required");
-  const client = locationClient(locationId);
+  const client = locationClient(); // always use location-level key for /users/ endpoint
   const response = await client.get("/users/", { params: { locationId } });
   return response.data.users || response.data;
 }
