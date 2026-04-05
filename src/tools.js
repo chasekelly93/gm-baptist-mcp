@@ -4,7 +4,7 @@ async function getSubAccounts({ limit = 10, skip = 0 } = {}) {
   const client = agencyClient();
   // The agency endpoint requires the companyId; GHL v2 uses /locations/search
   const response = await client.get("/locations/search", {
-    params: { limit, skip },
+    params: skip ? { limit, skip } : { limit },
   });
   const locations = response.data.locations || [];
   return {
@@ -25,7 +25,8 @@ async function getSubAccounts({ limit = 10, skip = 0 } = {}) {
 async function getContacts({ locationId, limit = 20, skip = 0, query } = {}) {
   if (!locationId) throw new Error("locationId is required");
   const client = locationClient(locationId);
-  const params = { locationId, limit, skip };
+  const params = { locationId, limit };
+  if (skip) params.skip = skip;
   if (query) params.query = query;
   const response = await client.get("/contacts/", { params });
   const contacts = response.data.contacts || [];
@@ -82,7 +83,8 @@ async function createContact({
 async function getConversations({ locationId, limit = 20, skip = 0, contactId, status } = {}) {
   if (!locationId) throw new Error("locationId is required");
   const client = locationClient(locationId);
-  const params = { locationId, limit, skip };
+  const params = { locationId, limit };
+  if (skip) params.skip = skip;
   if (contactId) params.contactId = contactId;
   if (status) params.status = status;
   const response = await client.get("/conversations/search", { params });
@@ -177,7 +179,8 @@ async function getBillingCharges({ startDate, endDate, locationId, limit = 100, 
     companyId = loc.data?.locations?.[0]?.companyId || null;
   } catch {}
 
-  const params = { limit, skip };
+  const params = { limit };
+  if (skip) params.skip = skip;
   if (startDate) params.startDate = startDate;
   if (endDate) params.endDate = endDate;
   if (locationId) params.locationId = locationId;
@@ -290,7 +293,7 @@ async function getContactsByTag({ locationId, tags, limit = 20, skip = 0 } = {})
   const params = new URLSearchParams();
   params.append("locationId", locationId);
   params.append("limit", String(limit));
-  params.append("skip", String(skip));
+  if (skip) params.append("skip", String(skip));
   tagList.forEach((t) => params.append("tags[]", t));
   const response = await client.get("/contacts/", { params });
   const contacts = response.data.contacts || [];
@@ -335,7 +338,8 @@ async function removeContactTags({ contactId, tags } = {}) {
 async function searchContacts({ locationId, query, limit = 20, skip = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
   const client = locationClient(locationId);
-  const params = { locationId, limit, skip };
+  const params = { locationId, limit };
+  if (skip) params.skip = skip;
   if (query) params.q = query;
   const response = await client.get("/contacts/search", { params });
   const contacts = response.data.contacts || [];
@@ -430,7 +434,8 @@ async function getPipelines({ locationId } = {}) {
 async function getOpportunities({ locationId, pipelineId, pipelineStageId, status, contactId, limit = 20, skip = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
   const client = locationClient(locationId);
-  const params = { location_id: locationId, limit, skip };
+  const params = { location_id: locationId, limit };
+  if (skip) params.skip = skip;
   if (pipelineId) params.pipeline_id = pipelineId;
   if (pipelineStageId) params.pipeline_stage_id = pipelineStageId;
   if (status) params.status = status;

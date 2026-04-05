@@ -126,7 +126,8 @@ async function getDuplicateContact({ locationId, email, phone } = {}) {
 async function getContactsByBusiness({ businessId, limit = 25, skip = 0, query } = {}) {
   if (!businessId) throw new Error("businessId is required");
   const client = locationClient();
-  const params = { limit, skip };
+  const params = { limit };
+  if (skip) params.skip = skip;
   if (query) params.query = query;
   const response = await client.get(`/contacts/business/${businessId}`, { params });
   return response.data;
@@ -622,7 +623,7 @@ async function getCalendarResources({ resourceType, locationId, limit = 20, skip
   if (!resourceType) throw new Error("resourceType is required (equipments or rooms)");
   if (!locationId) throw new Error("locationId is required");
   const client = locationClient(locationId);
-  const response = await client.get(`/calendars/resources/${resourceType}`, { params: { locationId, limit, skip } });
+  const response = await client.get(`/calendars/resources/${resourceType}`, { params: skip ? { locationId, limit, skip } : { locationId, limit } });
   return response.data;
 }
 
@@ -924,7 +925,8 @@ async function getLocationTemplates({ locationId, originId, type, deleted = fals
   if (!locationId) throw new Error("locationId is required");
   if (!originId) throw new Error("originId is required");
   const client = locationClient(locationId);
-  const params = { originId, deleted, skip, limit };
+  const params = { originId, deleted, limit };
+  if (skip) params.skip = skip;
   if (type) params.type = type;
   const response = await client.get(`/locations/${locationId}/templates`, { params });
   return response.data;
@@ -952,7 +954,8 @@ async function getTimezones({ locationId } = {}) {
 async function getBlogSites({ locationId, skip = 0, limit = 10, searchTerm } = {}) {
   if (!locationId) throw new Error("locationId is required");
   const client = locationClient(locationId);
-  const params = { locationId, skip, limit };
+  const params = { locationId, limit };
+  if (skip) params.skip = skip;
   if (searchTerm) params.searchTerm = searchTerm;
   const response = await client.get("/blogs/site/all", { params });
   return response.data;
@@ -1770,7 +1773,8 @@ async function deleteSocialCSVPost({ locationId, csvId, postId } = {}) {
 async function getSurveys({ locationId, skip = 0, limit = 50, type } = {}) {
   if (!locationId) throw new Error("locationId is required");
   const client = locationClient(locationId);
-  const params = { locationId, skip, limit };
+  const params = { locationId, limit };
+  if (skip) params.skip = skip;
   if (type) params.type = type;
   const response = await client.get("/surveys/", { params });
   return response.data;
@@ -2097,7 +2101,7 @@ async function getStoreSetting({ altId, altType = "location" } = {}) {
 async function getAllAssociations({ locationId, skip = 0, limit = 25 } = {}) {
   if (!locationId) throw new Error("locationId is required");
   const client = locationClient(locationId);
-  const response = await client.get("/associations/", { params: { locationId, skip: skip.toString(), limit: limit.toString() } });
+  const response = await client.get("/associations/", { params: skip ? { locationId, skip: skip.toString(), limit: limit.toString() } : { locationId, limit: limit.toString() } });
   return response.data;
 }
 
@@ -2169,7 +2173,8 @@ async function getRelationsByRecord({ recordId, locationId, skip = 0, limit = 25
   if (!recordId) throw new Error("recordId is required");
   if (!locationId) throw new Error("locationId is required");
   const client = locationClient(locationId);
-  const params = { locationId, skip: skip.toString(), limit: limit.toString() };
+  const params = { locationId, limit: limit.toString() };
+  if (skip) params.skip = skip.toString();
   if (associationIds) params.associationIds = associationIds;
   const response = await client.get(`/associations/relations/${recordId}`, { params });
   return response.data;
