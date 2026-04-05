@@ -293,19 +293,24 @@ async function getContactsByTag({ locationId, tags, limit = 20 } = {}) {
   // Pull all contacts using cursor pagination and filter client-side
   let allContacts = [];
   let startAfterId = null;
+  let startAfter = null;
   const pageSize = 100;
-  const maxPages = 30; // Up to 3000 contacts
+  const maxPages = 200; // Up to 20,000 contacts
   for (let page = 0; page < maxPages; page++) {
     const params = { locationId, limit: pageSize };
-    if (startAfterId) params.startAfterId = startAfterId;
+    if (startAfterId) {
+      params.startAfterId = startAfterId;
+      params.startAfter = startAfter;
+    }
     const response = await client.get("/contacts/", { params });
     const contacts = response.data.contacts || [];
+    const meta = response.data.meta || {};
     allContacts = allContacts.concat(contacts);
     // Check for end of results
-    if (contacts.length < pageSize) break;
-    const lastId = contacts[contacts.length - 1].id;
-    if (lastId === startAfterId) break; // Stuck on same page
-    startAfterId = lastId;
+    if (contacts.length < pageSize || !meta.nextPageUrl) break;
+    if (meta.startAfterId === startAfterId) break; // Stuck
+    startAfterId = meta.startAfterId;
+    startAfter = meta.startAfter;
     // Rate limit: pause every 5 pages (500 contacts) to stay under GHL limits
     if ((page + 1) % 5 === 0) await new Promise((r) => setTimeout(r, 15000));
   }
