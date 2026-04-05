@@ -285,24 +285,24 @@ async function getUsers({ locationId } = {}) {
   }
 }
 
-async function getContactsByTag({ locationId, tags, limit = 20, skip = 0 } = {}) {
+async function getContactsByTag({ locationId, tags, limit = 20 } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!tags || tags.length === 0) throw new Error("at least one tag is required");
   const client = locationClient(locationId);
   const tagList = Array.isArray(tags) ? tags : [tags];
-  // Pull all contacts and filter client-side by tag (GHL has no reliable tag filter param)
+  // Pull all contacts using cursor pagination and filter client-side
   let allContacts = [];
-  let currentSkip = 0;
+  let startAfterId = null;
   const pageSize = 100;
-  // Paginate through all contacts (up to 500 max to avoid excessive API calls)
   for (let page = 0; page < 5; page++) {
     const params = { locationId, limit: pageSize };
-    if (currentSkip) params.skip = currentSkip;
+    if (startAfterId) params.startAfterId = startAfterId;
     const response = await client.get("/contacts/", { params });
     const contacts = response.data.contacts || [];
     allContacts = allContacts.concat(contacts);
-    if (contacts.length < pageSize) break; // No more pages
-    currentSkip += pageSize;
+    if (contacts.length < pageSize) break;
+    // Use last contact's ID as cursor for next page
+    startAfterId = contacts[contacts.length - 1].id;
   }
   // Filter to contacts that have at least one of the requested tags
   const lowerTags = tagList.map((t) => t.toLowerCase());
