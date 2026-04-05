@@ -579,6 +579,42 @@ app.get("/api/engagement-data", async (_req, res) => {
   }
 });
 
+// ── Debug endpoint to diagnose tag search ──
+app.get("/api/debug-tags", async (_req, res) => {
+  try {
+    const locationId = process.env.PRIMARY_LOCATION_ID;
+    const client = require("./ghl-client").locationClient(locationId);
+    // Pull first page of contacts and inspect tags
+    const response = await client.get("/contacts/", { params: { locationId, limit: 100 } });
+    const contacts = response.data.contacts || [];
+    const total = response.data.total || response.data.count;
+    const meta = response.data.meta || response.data.pagination;
+    // Collect all unique tags
+    const allTags = new Set();
+    let platinumCount = 0;
+    let subCount = 0;
+    contacts.forEach((c) => {
+      (c.tags || []).forEach((t) => {
+        allTags.add(t);
+        if (t.toLowerCase() === "platinum") platinumCount++;
+        if (t.toLowerCase() === "software subscription") subCount++;
+      });
+    });
+    res.json({
+      totalFromApi: total,
+      contactsOnPage: contacts.length,
+      paginationMeta: meta,
+      allUniqueTags: Array.from(allTags).sort(),
+      platinumOnThisPage: platinumCount,
+      softwareSubscriptionOnThisPage: subCount,
+      sampleContact: contacts[0] ? { id: contacts[0].id, tags: contacts[0].tags, firstName: contacts[0].firstName } : null,
+      lastContact: contacts.length ? { id: contacts[contacts.length - 1].id, tags: contacts[contacts.length - 1].tags, firstName: contacts[contacts.length - 1].firstName } : null,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Client health endpoint (weekly health score for platinum/subscriber contacts) ──
 app.get("/api/client-health", async (_req, res) => {
   try {
