@@ -290,12 +290,13 @@ async function getContactsByTag({ locationId, tags, limit = 20, skip = 0 } = {})
   if (!tags || tags.length === 0) throw new Error("at least one tag is required");
   const client = locationClient(locationId);
   const tagList = Array.isArray(tags) ? tags : [tags];
-  const params = new URLSearchParams();
-  params.append("locationId", locationId);
-  params.append("limit", String(limit));
-  if (skip) params.append("skip", String(skip));
-  tagList.forEach((t) => params.append("tags[]", t));
-  const response = await client.get("/contacts/", { params });
+  const body = {
+    locationId,
+    pageSize: limit,
+    filters: [{ field: "tags", operator: "contains", value: tagList }],
+  };
+  if (skip) body.page = Math.floor(skip / limit) + 1;
+  const response = await client.post("/contacts/search", body);
   const contacts = response.data.contacts || [];
   return {
     total: response.data.total || contacts.length,
