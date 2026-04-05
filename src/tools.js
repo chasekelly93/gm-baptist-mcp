@@ -294,15 +294,20 @@ async function getContactsByTag({ locationId, tags, limit = 20 } = {}) {
   let allContacts = [];
   let startAfterId = null;
   const pageSize = 100;
-  for (let page = 0; page < 5; page++) {
+  const maxPages = 30; // Up to 3000 contacts
+  for (let page = 0; page < maxPages; page++) {
     const params = { locationId, limit: pageSize };
     if (startAfterId) params.startAfterId = startAfterId;
     const response = await client.get("/contacts/", { params });
     const contacts = response.data.contacts || [];
     allContacts = allContacts.concat(contacts);
+    // Check for end of results
     if (contacts.length < pageSize) break;
-    // Use last contact's ID as cursor for next page
-    startAfterId = contacts[contacts.length - 1].id;
+    const lastId = contacts[contacts.length - 1].id;
+    if (lastId === startAfterId) break; // Stuck on same page
+    startAfterId = lastId;
+    // Rate limit: pause every 5 pages (500 contacts) to stay under GHL limits
+    if ((page + 1) % 5 === 0) await new Promise((r) => setTimeout(r, 15000));
   }
   // Filter to contacts that have at least one of the requested tags
   const lowerTags = tagList.map((t) => t.toLowerCase());
