@@ -579,6 +579,89 @@ app.get("/api/engagement-data", async (_req, res) => {
   }
 });
 
+// ── Client health endpoint (weekly health score for platinum/subscriber contacts) ──
+app.get("/api/client-health", async (_req, res) => {
+  try {
+    const locationId = process.env.PRIMARY_LOCATION_ID;
+    if (!locationId) return res.status(500).json({ error: "PRIMARY_LOCATION_ID not set" });
+
+    // Pull platinum and software subscription contacts
+    const [platinumResult, subscriberResult] = await Promise.all([
+      getContactsByTag({ locationId, tags: ["platinum"], limit: 100 }).catch(() => ({ contacts: [] })),
+      getContactsByTag({ locationId, tags: ["software subscription"], limit: 100 }).catch(() => ({ contacts: [] })),
+    ]);
+
+    // Deduplicate by contact ID
+    const contactMap = new Map();
+    [...(platinumResult.contacts || []), ...(subscriberResult.contacts || [])].forEach((c) => {
+      if (c.id && !contactMap.has(c.id)) contactMap.set(c.id, c);
+    });
+    const contacts = Array.from(contactMap.values());
+
+    // Rate-limited enrichment: 20 contacts per batch, 15s pause between batches
+    const BATCH_SIZE = 20;
+    const BATCH_DELAY_MS = 15000;
+    const enriched = [];
+
+    for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
+      const batch = contacts.slice(i, i + BATCH_SIZE);
+
+      const batchResults = await Promise.all(batch.map(async (contact) => {
+        let conversations = [];
+        let recentMessages = [];
+        try {
+          const convosResult = await getConversations({ locationId, contactId: contact.id, limit: 5 });
+          conversations = (convosResult.conversations || []).map((c) => ({
+            id: c.id,
+            lastMessageDate: c.lastMessageDate || c.dateUpdated,
+            unreadCount: c.unreadCount,
+          }));
+          // Get messages from the most recent conversation
+          if (conversations.length > 0) {
+            const msgResult = await getMessages({ conversationId: conversations[0].id, limit: 10 });
+            recentMessages = (msgResult.messages || msgResult || []).map((m) => ({
+              direction: m.direction,
+              body: m.body,
+              dateAdded: m.dateAdded,
+              type: m.type || m.messageType,
+            }));
+          }
+        } catch (e) {
+          conversations = [{ error: e.message }];
+        }
+
+        return {
+          id: contact.id,
+          firstName: contact.firstName,
+          lastName: contact.lastName,
+          email: contact.email,
+          phone: contact.phone,
+          tags: contact.tags || [],
+          createdAt: contact.createdAt || contact.dateAdded,
+          conversations,
+          recentMessages,
+        };
+      }));
+
+      enriched.push(...batchResults);
+
+      // Pause between batches (skip pause after the last batch)
+      if (i + BATCH_SIZE < contacts.length) {
+        await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
+      }
+    }
+
+    res.json({
+      locationId,
+      pulledAt: new Date().toISOString(),
+      totalClients: enriched.length,
+      clients: enriched,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Manual sync trigger
 app.post("/sync", async (_req, res) => {
   res.json({ message: "Sync started", timestamp: new Date().toISOString() });
