@@ -290,17 +290,28 @@ async function getContactsByTag({ locationId, tags, limit = 20, skip = 0 } = {})
   if (!tags || tags.length === 0) throw new Error("at least one tag is required");
   const client = locationClient(locationId);
   const tagList = Array.isArray(tags) ? tags : [tags];
-  const body = {
-    locationId,
-    pageSize: limit,
-    filters: [{ field: "tags", operator: "contains", value: tagList }],
-  };
-  if (skip) body.page = Math.floor(skip / limit) + 1;
-  const response = await client.post("/contacts/search", body);
-  const contacts = response.data.contacts || [];
+  // Pull all contacts and filter client-side by tag (GHL has no reliable tag filter param)
+  let allContacts = [];
+  let currentSkip = 0;
+  const pageSize = 100;
+  // Paginate through all contacts (up to 500 max to avoid excessive API calls)
+  for (let page = 0; page < 5; page++) {
+    const params = { locationId, limit: pageSize };
+    if (currentSkip) params.skip = currentSkip;
+    const response = await client.get("/contacts/", { params });
+    const contacts = response.data.contacts || [];
+    allContacts = allContacts.concat(contacts);
+    if (contacts.length < pageSize) break; // No more pages
+    currentSkip += pageSize;
+  }
+  // Filter to contacts that have at least one of the requested tags
+  const lowerTags = tagList.map((t) => t.toLowerCase());
+  const matched = allContacts.filter((c) =>
+    c.tags && c.tags.some((t) => lowerTags.includes(t.toLowerCase()))
+  );
   return {
-    total: response.data.total || contacts.length,
-    contacts: contacts.map((c) => ({
+    total: matched.length,
+    contacts: matched.map((c) => ({
       id: c.id,
       firstName: c.firstName,
       lastName: c.lastName,
