@@ -587,9 +587,14 @@ app.get("/api/client-health", async (_req, res) => {
 
     // Pull platinum and software subscription contacts
     const [platinumResult, subscriberResult] = await Promise.all([
-      getContactsByTag({ locationId, tags: ["platinum"], limit: 100 }).catch(() => ({ contacts: [] })),
-      getContactsByTag({ locationId, tags: ["software subscription"], limit: 100 }).catch(() => ({ contacts: [] })),
+      getContactsByTag({ locationId, tags: ["platinum"], limit: 100 }).catch((e) => ({ contacts: [], error: `platinum: ${e.message}` })),
+      getContactsByTag({ locationId, tags: ["software subscription"], limit: 100 }).catch((e) => ({ contacts: [], error: `subscription: ${e.message}` })),
     ]);
+    // Surface any errors for debugging
+    const errors = [platinumResult.error, subscriberResult.error].filter(Boolean);
+    if (errors.length && (!platinumResult.contacts.length && !subscriberResult.contacts.length)) {
+      return res.json({ locationId, pulledAt: new Date().toISOString(), totalClients: 0, clients: [], debug: errors });
+    }
 
     // Deduplicate by contact ID
     const contactMap = new Map();
