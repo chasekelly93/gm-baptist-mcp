@@ -527,6 +527,58 @@ function createServer() {
   return s;
 }
 
+// ── Engagement data endpoint (for Make.com → Claude → Slack) ──────────────
+app.get("/api/engagement-data", async (_req, res) => {
+  try {
+    const locationId = process.env.PRIMARY_LOCATION_ID;
+    if (!locationId) return res.status(500).json({ error: "PRIMARY_LOCATION_ID not set" });
+
+    // Pull unread conversations
+    const convosResult = await getConversations({ locationId, status: "unread", limit: 50 });
+    const convos = convosResult.conversations || [];
+
+    // Pull contact + last 5 messages for each conversation
+    const enriched = await Promise.all(convos.map(async (convo) => {
+      let contact = null;
+      let messages = [];
+      try {
+        if (convo.contactId) contact = await getContact({ contactId: convo.contactId });
+      } catch (e) { contact = { error: e.message }; }
+      try {
+        messages = await getMessages({ conversationId: convo.id, limit: 5 });
+      } catch (e) { messages = { error: e.message }; }
+      return {
+        conversationId: convo.id,
+        contactId: convo.contactId,
+        lastMessageDate: convo.lastMessageDate || convo.dateUpdated,
+        contact: contact ? {
+          id: contact.id || contact.contactId,
+          firstName: contact.firstName || contact.contact?.firstName,
+          lastName: contact.lastName || contact.contact?.lastName,
+          email: contact.email || contact.contact?.email,
+          phone: contact.phone || contact.contact?.phone,
+          tags: contact.tags || contact.contact?.tags || [],
+        } : null,
+        messages: Array.isArray(messages.messages || messages) ? (messages.messages || messages).map((m) => ({
+          direction: m.direction,
+          body: m.body,
+          dateAdded: m.dateAdded,
+          type: m.type || m.messageType,
+        })) : messages,
+      };
+    }));
+
+    res.json({
+      locationId,
+      pulledAt: new Date().toISOString(),
+      totalUnread: enriched.length,
+      conversations: enriched,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Manual sync trigger
 app.post("/sync", async (_req, res) => {
   res.json({ message: "Sync started", timestamp: new Date().toISOString() });
