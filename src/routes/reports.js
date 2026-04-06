@@ -69,15 +69,23 @@ router.get("/engagement-data", async (_req, res) => {
 
 // ── Client health: kick off job ──
 // Pass ?callback=https://hook.make.com/xxx to receive results via webhook when done
+// Only one job runs at a time — duplicate requests return the existing job
 router.get("/client-health", async (req, res) => {
   cleanOldJobs();
+
+  // Check if a job is already running
+  for (const [existingId, existingJob] of jobs) {
+    if (existingJob.type === "client-health" && existingJob.status === "running") {
+      return res.json({ status: "already_running", jobId: existingId, progress: existingJob.progress, poll: `/api/client-health/${existingId}` });
+    }
+  }
 
   const locationId = process.env.PRIMARY_LOCATION_ID;
   if (!locationId) return res.status(500).json({ error: "PRIMARY_LOCATION_ID not set" });
 
   const jobId = randomUUID();
   const callback = req.query.callback || null;
-  const job = { status: "running", startedAt: new Date().toISOString(), progress: "0/0", callback, result: null };
+  const job = { type: "client-health", status: "running", startedAt: new Date().toISOString(), progress: "0/0", callback, result: null };
   jobs.set(jobId, job);
 
   res.json({ status: "started", jobId, poll: `/api/client-health/${jobId}`, callback: callback || "none (add ?callback=URL to receive results)" });
