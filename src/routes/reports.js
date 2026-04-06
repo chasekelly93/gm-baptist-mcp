@@ -107,37 +107,39 @@ async function enrichContacts(locationId, contacts, job) {
 
     const batchResults = await Promise.all(batch.map(async (contact) => {
       let conversations = [];
-      let recentMessages = [];
+      let messageSummary = { total: 0, inbound: 0, outbound: 0, lastDate: null };
       try {
         const convosResult = await getConversations({ locationId, contactId: contact.id, limit: 5 });
         conversations = (convosResult.conversations || []).map((c) => ({
-          id: c.id,
           lastMessageDate: c.lastMessageDate || c.dateUpdated,
           unreadCount: c.unreadCount,
         }));
         if (conversations.length > 0) {
-          const msgResult = await getMessages({ conversationId: conversations[0].id, limit: 10 });
-          recentMessages = (msgResult.messages || msgResult || []).map((m) => ({
-            direction: m.direction,
-            body: m.body,
-            dateAdded: m.dateAdded,
-            type: m.type || m.messageType,
-          }));
+          const msgResult = await getMessages({ conversationId: (convosResult.conversations || [])[0].id, limit: 10 });
+          const msgs = msgResult.messages || msgResult || [];
+          msgs.forEach((m) => {
+            const type = m.type || m.messageType || "";
+            if (type === "TYPE_ACTIVITY_OPPORTUNITY" || type === "TYPE_EMAIL") return;
+            messageSummary.total++;
+            if (m.direction === "inbound") messageSummary.inbound++;
+            if (m.direction === "outbound") messageSummary.outbound++;
+            const d = m.dateAdded;
+            if (d && (!messageSummary.lastDate || d > messageSummary.lastDate)) messageSummary.lastDate = d;
+          });
         }
       } catch (e) {
         conversations = [{ error: e.message }];
       }
 
       return {
-        id: contact.id,
-        firstName: contact.firstName,
-        lastName: contact.lastName,
-        email: contact.email,
-        phone: contact.phone,
-        tags: contact.tags || [],
-        createdAt: contact.createdAt || contact.dateAdded,
-        conversations,
-        recentMessages,
+        name: `${(contact.firstName || "").trim()} ${(contact.lastName || "").trim()}`.trim(),
+        email: contact.email || "",
+        phone: contact.phone || "",
+        tags: (contact.tags || []).join("; "),
+        conversationCount: conversations.length,
+        unreadCount: conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0),
+        lastConversationDate: conversations[0]?.lastMessageDate || null,
+        messageSummary,
       };
     }));
 
