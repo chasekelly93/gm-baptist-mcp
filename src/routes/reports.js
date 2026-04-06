@@ -115,6 +115,73 @@ router.get("/client-health", async (req, res) => {
   });
 });
 
+// ── Client health: test with 10 contacts (synchronous, no callback) ──
+router.get("/client-health/test", async (_req, res) => {
+  try {
+    const locationId = process.env.PRIMARY_LOCATION_ID;
+    if (!locationId) return res.status(500).json({ error: "PRIMARY_LOCATION_ID not set" });
+
+    const [platinumResult, subscriberResult] = await Promise.all([
+      getContactsByTag({ locationId, tags: ["platinum"], limit: 10 }).catch((e) => ({ contacts: [], error: e.message })),
+      getContactsByTag({ locationId, tags: ["software subscription"], limit: 10 }).catch((e) => ({ contacts: [], error: e.message })),
+    ]);
+
+    const contactMap = new Map();
+    [...(platinumResult.contacts || []), ...(subscriberResult.contacts || [])].forEach((c) => {
+      if (c.id && !contactMap.has(c.id)) contactMap.set(c.id, c);
+    });
+    const contacts = Array.from(contactMap.values()).slice(0, 10);
+
+    const enriched = await Promise.all(contacts.map(async (contact) => {
+      let conversations = [];
+      let recentMessages = [];
+      try {
+        const convosResult = await getConversations({ locationId, contactId: contact.id, limit: 3 });
+        conversations = (convosResult.conversations || []).map((c) => ({
+          id: c.id,
+          lastMessageDate: c.lastMessageDate || c.dateUpdated,
+          unreadCount: c.unreadCount,
+        }));
+        if (conversations.length > 0) {
+          const msgResult = await getMessages({ conversationId: conversations[0].id, limit: 5 });
+          recentMessages = (msgResult.messages || msgResult || []).map((m) => ({
+            direction: m.direction,
+            body: m.body,
+            dateAdded: m.dateAdded,
+            type: m.type || m.messageType,
+          }));
+        }
+      } catch (e) {
+        conversations = [{ error: e.message }];
+      }
+      return {
+        id: contact.id,
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        email: contact.email,
+        phone: contact.phone,
+        tags: contact.tags || [],
+        conversations,
+        recentMessages,
+      };
+    }));
+
+    res.json({
+      test: true,
+      locationId,
+      pulledAt: new Date().toISOString(),
+      totalClients: enriched.length,
+      platinumFound: (platinumResult.contacts || []).length,
+      platinumError: platinumResult.error || null,
+      subscriptionFound: (subscriberResult.contacts || []).length,
+      subscriptionError: subscriberResult.error || null,
+      clients: enriched,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message, stack: e.stack });
+  }
+});
+
 // ── Client health: poll for result ──
 router.get("/client-health/:jobId", async (req, res) => {
   const job = jobs.get(req.params.jobId);
