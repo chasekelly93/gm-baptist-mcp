@@ -285,43 +285,24 @@ async function getUsers({ locationId } = {}) {
   }
 }
 
-async function getContactsByTag({ locationId, tags, limit = 20 } = {}) {
+async function getContactsByTag({ locationId, tags, limit = 20, skip = 0 } = {}) {
   if (!locationId) throw new Error("locationId is required");
   if (!tags || tags.length === 0) throw new Error("at least one tag is required");
   const client = locationClient(locationId);
   const tagList = Array.isArray(tags) ? tags : [tags];
-  // Pull all contacts using cursor pagination and filter client-side
-  let allContacts = [];
-  let startAfterId = null;
-  let startAfter = null;
-  const pageSize = 100;
-  const maxPages = 200; // Up to 20,000 contacts
-  for (let page = 0; page < maxPages; page++) {
-    const params = { locationId, limit: pageSize };
-    if (startAfterId) {
-      params.startAfterId = startAfterId;
-      params.startAfter = startAfter;
-    }
-    const response = await client.get("/contacts/", { params });
-    const contacts = response.data.contacts || [];
-    const meta = response.data.meta || {};
-    allContacts = allContacts.concat(contacts);
-    // Check for end of results
-    if (contacts.length < pageSize || !meta.nextPageUrl) break;
-    if (meta.startAfterId === startAfterId) break; // Stuck
-    startAfterId = meta.startAfterId;
-    startAfter = meta.startAfter;
-    // Rate limit: pause every 5 pages (500 contacts) to stay under GHL limits
-    if ((page + 1) % 5 === 0) await new Promise((r) => setTimeout(r, 15000));
-  }
-  // Filter to contacts that have at least one of the requested tags
-  const lowerTags = tagList.map((t) => t.toLowerCase());
-  const matched = allContacts.filter((c) =>
-    c.tags && c.tags.some((t) => lowerTags.includes(t.toLowerCase()))
-  );
+  // Use POST /contacts/search with tag filter (GHL v2 search endpoint)
+  const body = {
+    locationId,
+    pageLimit: limit,
+    query: "",
+    filters: [{ group: "AND", filters: tagList.map((t) => ({ field: "tags", operator: "contains", value: t })) }],
+  };
+  if (skip) body.page = Math.floor(skip / limit) + 1;
+  const response = await client.post("/contacts/search", body);
+  const contacts = response.data.contacts || [];
   return {
-    total: matched.length,
-    contacts: matched.map((c) => ({
+    total: response.data.total || contacts.length,
+    contacts: contacts.map((c) => ({
       id: c.id,
       firstName: c.firstName,
       lastName: c.lastName,
