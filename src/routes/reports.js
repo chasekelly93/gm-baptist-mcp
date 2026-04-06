@@ -1,5 +1,6 @@
 const express = require("express");
 const { randomUUID } = require("node:crypto");
+const axios = require("axios");
 const router = express.Router();
 const {
   getConversations, getContact, getMessages, getContactsByTag,
@@ -67,20 +68,31 @@ router.get("/engagement-data", async (_req, res) => {
 });
 
 // ── Client health: kick off job ──
-router.get("/client-health", async (_req, res) => {
+// Pass ?callback=https://hook.make.com/xxx to receive results via webhook when done
+router.get("/client-health", async (req, res) => {
   cleanOldJobs();
 
   const locationId = process.env.PRIMARY_LOCATION_ID;
   if (!locationId) return res.status(500).json({ error: "PRIMARY_LOCATION_ID not set" });
 
   const jobId = randomUUID();
-  const job = { status: "running", startedAt: new Date().toISOString(), progress: "0/0", updated: 0, skipped: 0, result: null };
+  const callback = req.query.callback || null;
+  const job = { status: "running", startedAt: new Date().toISOString(), progress: "0/0", callback, result: null };
   jobs.set(jobId, job);
 
-  res.json({ status: "started", jobId, poll: `/api/client-health/${jobId}` });
+  res.json({ status: "started", jobId, poll: `/api/client-health/${jobId}`, callback: callback || "none (add ?callback=URL to receive results)" });
 
   // Run in background
-  runClientHealth(locationId, job).catch((e) => {
+  runClientHealth(locationId, job).then(async () => {
+    if (job.callback) {
+      try {
+        await axios.post(job.callback, job.result, { headers: { "Content-Type": "application/json" }, timeout: 30000 });
+        console.log(`[client-health] callback sent to ${job.callback}`);
+      } catch (e) {
+        console.error(`[client-health] callback failed: ${e.message}`);
+      }
+    }
+  }).catch((e) => {
     job.status = "error";
     job.error = e.message;
   });
