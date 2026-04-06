@@ -76,7 +76,15 @@ router.get("/client-health", async (req, res) => {
   // Check if a job is already running
   for (const [existingId, existingJob] of jobs) {
     if (existingJob.type === "client-health" && existingJob.status === "running") {
-      return res.json({ status: "already_running", jobId: existingId, progress: existingJob.progress, poll: `/api/client-health/${existingId}` });
+      return res.json({
+        status: "already_running",
+        jobId: existingId,
+        progress: existingJob.progress,
+        batch: `${existingJob.currentBatch || 0}/${existingJob.totalBatches || "?"}`,
+        totalContacts: existingJob.totalContacts || 0,
+        elapsed: `${Math.round((Date.now() - new Date(existingJob.startedAt).getTime()) / 1000)}s`,
+        poll: `/api/client-health/${existingId}`,
+      });
     }
   }
 
@@ -118,11 +126,20 @@ router.get("/client-health/:jobId", async (req, res) => {
     return res.json({ status: "error", error: job.error });
   }
 
-  res.json({ status: "running", progress: job.progress, startedAt: job.startedAt });
+  res.json({
+    status: "running",
+    progress: job.progress,
+    batch: `${job.currentBatch || 0}/${job.totalBatches || "?"}`,
+    totalContacts: job.totalContacts || 0,
+    startedAt: job.startedAt,
+    elapsed: `${Math.round((Date.now() - new Date(job.startedAt).getTime()) / 1000)}s`,
+  });
 });
 
 // ── Client health worker ──
 async function runClientHealth(locationId, job) {
+  console.log("[client-health] started");
+
   const [platinumResult, subscriberResult] = await Promise.all([
     getContactsByTag({ locationId, tags: ["platinum"], limit: 100 }).catch((e) => ({ contacts: [], error: `platinum: ${e.message}` })),
     getContactsByTag({ locationId, tags: ["software subscription"], limit: 100 }).catch((e) => ({ contacts: [], error: `subscription: ${e.message}` })),
@@ -133,6 +150,12 @@ async function runClientHealth(locationId, job) {
     if (c.id && !contactMap.has(c.id)) contactMap.set(c.id, c);
   });
   const contacts = Array.from(contactMap.values());
+  const totalBatches = Math.ceil(contacts.length / 20);
+
+  console.log(`[client-health] found ${contacts.length} contacts — ${totalBatches} batches`);
+  job.totalContacts = contacts.length;
+  job.totalBatches = totalBatches;
+  job.currentBatch = 0;
 
   const BATCH_SIZE = 20;
   const BATCH_DELAY_MS = 15000;
@@ -140,7 +163,10 @@ async function runClientHealth(locationId, job) {
 
   for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
     const batch = contacts.slice(i, i + BATCH_SIZE);
+    const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+    job.currentBatch = batchNum;
     job.progress = `${Math.min(i + BATCH_SIZE, contacts.length)}/${contacts.length}`;
+    console.log(`[client-health] batch ${batchNum}/${totalBatches} (${job.progress})`);
 
     const batchResults = await Promise.all(batch.map(async (contact) => {
       let conversations = [];
@@ -185,6 +211,7 @@ async function runClientHealth(locationId, job) {
     }
   }
 
+  console.log(`[client-health] complete — ${enriched.length} clients enriched`);
   job.status = "complete";
   job.result = {
     locationId,
