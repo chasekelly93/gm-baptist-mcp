@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "gm-baptist": {
+      "type": "url",
+      "url": "https://gm-baptist-mcp-nytse.ondigitalocean.app/mcp"
+    }
+  }
+}
