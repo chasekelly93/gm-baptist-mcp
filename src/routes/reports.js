@@ -79,6 +79,7 @@ router.get("/client-health", async (req, res) => {
       return res.json({
         status: "already_running",
         jobId: existingId,
+        phase: existingJob.phase || "initializing",
         progress: existingJob.progress,
         batch: `${existingJob.currentBatch || 0}/${existingJob.totalBatches || "?"}`,
         totalContacts: existingJob.totalContacts || 0,
@@ -128,6 +129,7 @@ router.get("/client-health/:jobId", async (req, res) => {
 
   res.json({
     status: "running",
+    phase: job.phase || "initializing",
     progress: job.progress,
     batch: `${job.currentBatch || 0}/${job.totalBatches || "?"}`,
     totalContacts: job.totalContacts || 0,
@@ -138,12 +140,22 @@ router.get("/client-health/:jobId", async (req, res) => {
 
 // ── Client health worker ──
 async function runClientHealth(locationId, job) {
-  console.log("[client-health] started");
+  console.log("[client-health] started — fetching tagged contacts...");
+  job.phase = "fetching contacts";
 
   const [platinumResult, subscriberResult] = await Promise.all([
-    getContactsByTag({ locationId, tags: ["platinum"], limit: 100 }).catch((e) => ({ contacts: [], error: `platinum: ${e.message}` })),
-    getContactsByTag({ locationId, tags: ["software subscription"], limit: 100 }).catch((e) => ({ contacts: [], error: `subscription: ${e.message}` })),
+    getContactsByTag({ locationId, tags: ["platinum"], limit: 100 }).catch((e) => {
+      console.error(`[client-health] platinum fetch error: ${e.message}`);
+      return { contacts: [], error: `platinum: ${e.message}` };
+    }),
+    getContactsByTag({ locationId, tags: ["software subscription"], limit: 100 }).catch((e) => {
+      console.error(`[client-health] subscription fetch error: ${e.message}`);
+      return { contacts: [], error: `subscription: ${e.message}` };
+    }),
   ]);
+
+  console.log(`[client-health] platinum: ${(platinumResult.contacts || []).length} contacts${platinumResult.error ? ` (ERROR: ${platinumResult.error})` : ""}`);
+  console.log(`[client-health] subscription: ${(subscriberResult.contacts || []).length} contacts${subscriberResult.error ? ` (ERROR: ${subscriberResult.error})` : ""}`);
 
   const contactMap = new Map();
   [...(platinumResult.contacts || []), ...(subscriberResult.contacts || [])].forEach((c) => {
@@ -152,7 +164,8 @@ async function runClientHealth(locationId, job) {
   const contacts = Array.from(contactMap.values());
   const totalBatches = Math.ceil(contacts.length / 20);
 
-  console.log(`[client-health] found ${contacts.length} contacts — ${totalBatches} batches`);
+  console.log(`[client-health] ${contacts.length} unique contacts — ${totalBatches} batches`);
+  job.phase = "enriching";
   job.totalContacts = contacts.length;
   job.totalBatches = totalBatches;
   job.currentBatch = 0;
