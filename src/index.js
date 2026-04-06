@@ -534,6 +534,19 @@ app.use("/api", reportsRouter);
 app.use("/sync", syncRouter);
 app.use("/health", healthRouter);
 
+// Quick test endpoint for get_contacts_by_tag
+app.get("/api/test-contacts-tag", async (req, res) => {
+  try {
+    const locationId = req.query.locationId || process.env.PRIMARY_LOCATION_ID;
+    const tags = req.query.tags ? req.query.tags.split(",") : ["platinum"];
+    const limit = parseInt(req.query.limit) || 10;
+    const result = await getContactsByTag({ locationId, tags, limit });
+    res.json({ success: true, ...result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message, details: err.response?.data });
+  }
+});
+
 // MCP GET — SSE stream for existing session
 app.get("/mcp", async (req, res) => {
   req.headers["accept"] = "application/json, text/event-stream";
