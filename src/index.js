@@ -708,6 +708,10 @@ app.post("/sync", async (_req, res) => {
   res.json({ message: "Sync started", timestamp: new Date().toISOString() });
   runSync().catch((err) => console.error("[sync] fatal:", err.message));
 });
+app.get("/sync", async (_req, res) => {
+  res.json({ message: "Sync started", timestamp: new Date().toISOString() });
+  runSync().catch((err) => console.error("[sync] fatal:", err.message));
+});
 
 // Health check
 app.get("/health", (_req, res) => {
