@@ -1,8 +1,20 @@
 const express = require("express");
+const { randomUUID } = require("node:crypto");
 const router = express.Router();
 const {
   getConversations, getContact, getMessages, getContactsByTag,
 } = require("../tools");
+
+// ── Job store (in-memory) ──
+const jobs = new Map();
+
+// Clean up jobs older than 30 minutes
+function cleanOldJobs() {
+  const cutoff = Date.now() - 30 * 60 * 1000;
+  for (const [id, job] of jobs) {
+    if (new Date(job.startedAt).getTime() < cutoff) jobs.delete(id);
+  }
+}
 
 // ── Engagement data (unread conversations + contact + messages) ──
 router.get("/engagement-data", async (_req, res) => {
@@ -54,87 +66,113 @@ router.get("/engagement-data", async (_req, res) => {
   }
 });
 
-// ── Client health (weekly health score for platinum/subscriber contacts) ──
+// ── Client health: kick off job ──
 router.get("/client-health", async (_req, res) => {
-  try {
-    const locationId = process.env.PRIMARY_LOCATION_ID;
-    if (!locationId) return res.status(500).json({ error: "PRIMARY_LOCATION_ID not set" });
+  cleanOldJobs();
 
-    const [platinumResult, subscriberResult] = await Promise.all([
-      getContactsByTag({ locationId, tags: ["platinum"], limit: 100 }).catch((e) => ({ contacts: [], error: `platinum: ${e.message}` })),
-      getContactsByTag({ locationId, tags: ["software subscription"], limit: 100 }).catch((e) => ({ contacts: [], error: `subscription: ${e.message}` })),
-    ]);
-    const errors = [platinumResult.error, subscriberResult.error].filter(Boolean);
-    if (errors.length && (!platinumResult.contacts.length && !subscriberResult.contacts.length)) {
-      return res.json({ locationId, pulledAt: new Date().toISOString(), totalClients: 0, clients: [], debug: errors });
-    }
+  const locationId = process.env.PRIMARY_LOCATION_ID;
+  if (!locationId) return res.status(500).json({ error: "PRIMARY_LOCATION_ID not set" });
 
-    const contactMap = new Map();
-    [...(platinumResult.contacts || []), ...(subscriberResult.contacts || [])].forEach((c) => {
-      if (c.id && !contactMap.has(c.id)) contactMap.set(c.id, c);
-    });
-    const contacts = Array.from(contactMap.values());
+  const jobId = randomUUID();
+  const job = { status: "running", startedAt: new Date().toISOString(), progress: "0/0", updated: 0, skipped: 0, result: null };
+  jobs.set(jobId, job);
 
-    const BATCH_SIZE = 20;
-    const BATCH_DELAY_MS = 15000;
-    const enriched = [];
+  res.json({ status: "started", jobId, poll: `/api/client-health/${jobId}` });
 
-    for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
-      const batch = contacts.slice(i, i + BATCH_SIZE);
-
-      const batchResults = await Promise.all(batch.map(async (contact) => {
-        let conversations = [];
-        let recentMessages = [];
-        try {
-          const convosResult = await getConversations({ locationId, contactId: contact.id, limit: 5 });
-          conversations = (convosResult.conversations || []).map((c) => ({
-            id: c.id,
-            lastMessageDate: c.lastMessageDate || c.dateUpdated,
-            unreadCount: c.unreadCount,
-          }));
-          if (conversations.length > 0) {
-            const msgResult = await getMessages({ conversationId: conversations[0].id, limit: 10 });
-            recentMessages = (msgResult.messages || msgResult || []).map((m) => ({
-              direction: m.direction,
-              body: m.body,
-              dateAdded: m.dateAdded,
-              type: m.type || m.messageType,
-            }));
-          }
-        } catch (e) {
-          conversations = [{ error: e.message }];
-        }
-
-        return {
-          id: contact.id,
-          firstName: contact.firstName,
-          lastName: contact.lastName,
-          email: contact.email,
-          phone: contact.phone,
-          tags: contact.tags || [],
-          createdAt: contact.createdAt || contact.dateAdded,
-          conversations,
-          recentMessages,
-        };
-      }));
-
-      enriched.push(...batchResults);
-
-      if (i + BATCH_SIZE < contacts.length) {
-        await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
-      }
-    }
-
-    res.json({
-      locationId,
-      pulledAt: new Date().toISOString(),
-      totalClients: enriched.length,
-      clients: enriched,
-    });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+  // Run in background
+  runClientHealth(locationId, job).catch((e) => {
+    job.status = "error";
+    job.error = e.message;
+  });
 });
+
+// ── Client health: poll for result ──
+router.get("/client-health/:jobId", async (req, res) => {
+  const job = jobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: "Job not found" });
+
+  if (job.status === "complete") {
+    return res.json({ status: "complete", ...job.result });
+  }
+  if (job.status === "error") {
+    return res.json({ status: "error", error: job.error });
+  }
+
+  res.json({ status: "running", progress: job.progress, startedAt: job.startedAt });
+});
+
+// ── Client health worker ──
+async function runClientHealth(locationId, job) {
+  const [platinumResult, subscriberResult] = await Promise.all([
+    getContactsByTag({ locationId, tags: ["platinum"], limit: 100 }).catch((e) => ({ contacts: [], error: `platinum: ${e.message}` })),
+    getContactsByTag({ locationId, tags: ["software subscription"], limit: 100 }).catch((e) => ({ contacts: [], error: `subscription: ${e.message}` })),
+  ]);
+
+  const contactMap = new Map();
+  [...(platinumResult.contacts || []), ...(subscriberResult.contacts || [])].forEach((c) => {
+    if (c.id && !contactMap.has(c.id)) contactMap.set(c.id, c);
+  });
+  const contacts = Array.from(contactMap.values());
+
+  const BATCH_SIZE = 20;
+  const BATCH_DELAY_MS = 15000;
+  const enriched = [];
+
+  for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
+    const batch = contacts.slice(i, i + BATCH_SIZE);
+    job.progress = `${Math.min(i + BATCH_SIZE, contacts.length)}/${contacts.length}`;
+
+    const batchResults = await Promise.all(batch.map(async (contact) => {
+      let conversations = [];
+      let recentMessages = [];
+      try {
+        const convosResult = await getConversations({ locationId, contactId: contact.id, limit: 5 });
+        conversations = (convosResult.conversations || []).map((c) => ({
+          id: c.id,
+          lastMessageDate: c.lastMessageDate || c.dateUpdated,
+          unreadCount: c.unreadCount,
+        }));
+        if (conversations.length > 0) {
+          const msgResult = await getMessages({ conversationId: conversations[0].id, limit: 10 });
+          recentMessages = (msgResult.messages || msgResult || []).map((m) => ({
+            direction: m.direction,
+            body: m.body,
+            dateAdded: m.dateAdded,
+            type: m.type || m.messageType,
+          }));
+        }
+      } catch (e) {
+        conversations = [{ error: e.message }];
+      }
+
+      return {
+        id: contact.id,
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        email: contact.email,
+        phone: contact.phone,
+        tags: contact.tags || [],
+        createdAt: contact.createdAt || contact.dateAdded,
+        conversations,
+        recentMessages,
+      };
+    }));
+
+    enriched.push(...batchResults);
+
+    if (i + BATCH_SIZE < contacts.length) {
+      await new Promise((r) => setTimeout(r, BATCH_DELAY_MS));
+    }
+  }
+
+  job.status = "complete";
+  job.result = {
+    locationId,
+    pulledAt: new Date().toISOString(),
+    totalClients: enriched.length,
+    clients: enriched,
+  };
+}
 
 // ── Debug: tag search diagnostics ──
 router.get("/debug-tags", async (_req, res) => {
