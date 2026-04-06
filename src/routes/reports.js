@@ -175,7 +175,7 @@ router.get("/client-health", async (req, res) => {
 
   const jobId = randomUUID();
   const callback = req.query.callback || null;
-  const job = { type: "client-health", status: "running", startedAt: new Date().toISOString(), progress: "0/0", callback, result: null };
+  const job = { type: "client-health", status: "running", startedAt: new Date().toISOString(), progress: "0/0", callback, jobId, result: null };
   jobs.set(jobId, job);
 
   res.json({ status: "started", jobId, poll: `/api/client-health/${jobId}`, callback: callback || "none (add ?callback=URL to receive results)" });
@@ -183,7 +183,12 @@ router.get("/client-health", async (req, res) => {
   runClientHealth(locationId, job).then(async () => {
     if (job.callback) {
       try {
-        await axios.post(job.callback, job.result, { headers: { "Content-Type": "application/json" }, timeout: 30000 });
+        await axios.post(job.callback, {
+          status: "complete",
+          jobId,
+          totalClients: job.result.totalClients,
+          fetchUrl: `/api/client-health/${jobId}`,
+        }, { headers: { "Content-Type": "application/json" }, timeout: 30000 });
         console.log(`[client-health] callback sent to ${job.callback}`);
       } catch (e) {
         console.error(`[client-health] callback failed: ${e.message}`);
