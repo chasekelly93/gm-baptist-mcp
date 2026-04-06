@@ -261,6 +261,17 @@ router.get("/client-health/:jobId", async (req, res) => {
   });
 });
 
+// ── Client health: get CSV directly ──
+router.get("/client-health/:jobId/csv", async (req, res) => {
+  const job = jobs.get(req.params.jobId);
+  if (!job) return res.status(404).json({ error: "Job not found" });
+  if (job.status !== "complete") return res.json({ status: job.status, progress: job.progress });
+
+  res.setHeader("Content-Type", "text/csv");
+  res.setHeader("Content-Disposition", `attachment; filename="client-health-${new Date().toISOString().slice(0, 10)}.csv"`);
+  res.send(job.result.csv);
+});
+
 // ── Client health worker ──
 async function runClientHealth(locationId, job) {
   console.log("[client-health] started — searching for tagged contacts...");
@@ -292,12 +303,107 @@ async function runClientHealth(locationId, job) {
   const enriched = await enrichContacts(locationId, contacts, job);
 
   console.log(`[client-health] complete — ${enriched.length} clients enriched`);
+
+  // Score each client
+  const scored = enriched.map((c) => scoreClient(c)).sort((a, b) => a.score - b.score);
+
+  // Generate CSV
+  const csvHeader = "Name,Email,Phone,Tags,Score,Status,Responsiveness,Activity,Direction,Unread,Last Message,Action";
+  const csvRows = scored.map((c) => {
+    const fields = [c.name, c.email, c.phone, c.tags, c.score, c.status, c.responsiveness, c.activity, c.direction, c.unread, c.lastMessage, c.action];
+    return fields.map((f) => {
+      const s = String(f || "");
+      return s.includes(",") || s.includes('"') ? `"${s.replace(/"/g, '""')}"` : s;
+    }).join(",");
+  });
+
+  const needsAttention = scored.filter((c) => c.score <= 40);
+  const monitor = scored.filter((c) => c.score > 40 && c.score <= 70);
+  const healthy = scored.filter((c) => c.score > 70);
+  const avgScore = scored.length ? Math.round(scored.reduce((s, c) => s + c.score, 0) / scored.length) : 0;
+
+  const summaryRow = `SUMMARY,${new Date().toISOString().slice(0, 10)},Total: ${scored.length},Avg: ${avgScore},Needs Attention: ${needsAttention.length},Monitor: ${monitor.length},Healthy: ${healthy.length},,,,,`;
+  const followUp = needsAttention.slice(0, 10).map((c) => c.name).join("; ");
+  const followUpRow = `FOLLOW-UP,${followUp},,,,,,,,,,`;
+
+  const csv = [csvHeader, ...csvRows, "", summaryRow, followUpRow].join("\n");
+
   job.status = "complete";
   job.result = {
     locationId,
     pulledAt: new Date().toISOString(),
-    totalClients: enriched.length,
-    clients: enriched,
+    totalClients: scored.length,
+    summary: { avgScore, needsAttention: needsAttention.length, monitor: monitor.length, healthy: healthy.length },
+    csv,
+    clients: scored,
+  };
+}
+
+// ── Scoring logic ──
+function scoreClient(client) {
+  const now = Date.now();
+
+  // Responsiveness (40 pts) — based on most recent SMS date
+  let responsiveness = 0;
+  const lastDateStr = client.messageSummary?.lastDate;
+  const lastConvoDate = client.lastConversationDate;
+  const lastTs = lastDateStr ? new Date(lastDateStr).getTime() : (lastConvoDate || 0);
+  const daysSince = lastTs ? Math.floor((now - lastTs) / (1000 * 60 * 60 * 24)) : 999;
+  if (daysSince <= 7) responsiveness = 40;
+  else if (daysSince <= 14) responsiveness = 30;
+  else if (daysSince <= 30) responsiveness = 20;
+  else if (daysSince <= 60) responsiveness = 10;
+
+  // Activity (30 pts) — based on conversation count
+  let activity = 0;
+  const convoCount = client.conversationCount || 0;
+  if (convoCount >= 3) activity = 30;
+  else if (convoCount === 2) activity = 25;
+  else if (convoCount === 1) activity = 20;
+
+  // Direction (20 pts) — based on inbound vs outbound SMS
+  let direction = 0;
+  const { total = 0, inbound = 0, outbound = 0 } = client.messageSummary || {};
+  if (total > 0) {
+    const ratio = inbound / total;
+    if (ratio >= 0.5) direction = 20;
+    else if (ratio >= 0.3) direction = 15;
+    else direction = 5;
+  }
+
+  // Unread (10 pts)
+  const unread = (client.unreadCount || 0) === 0 ? 10 : 0;
+
+  const score = responsiveness + activity + direction + unread;
+  let status, action;
+  if (score <= 40) {
+    status = "Needs Attention";
+    if (daysSince > 60) action = `Re-engage - no contact in ${daysSince} days`;
+    else if (daysSince > 30) action = "Follow up via SMS";
+    else action = "Review and reach out";
+  } else if (score <= 70) {
+    status = "Monitor";
+    action = unread === 0 && direction < 15 ? "Encourage more engagement" : "Monitor - stable";
+  } else {
+    status = "Healthy";
+    action = "On track";
+  }
+
+  const lastMessage = lastTs && lastTs > 0 ? new Date(lastTs).toISOString().slice(0, 10) : "N/A";
+
+  return {
+    name: client.name,
+    email: client.email,
+    phone: client.phone,
+    tags: client.tags,
+    score,
+    status,
+    responsiveness,
+    activity,
+    direction,
+    unread,
+    lastMessage,
+    action,
   };
 }
 
