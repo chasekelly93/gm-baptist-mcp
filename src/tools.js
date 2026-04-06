@@ -293,7 +293,7 @@ async function getContactsByTag({ locationId, tags, limit = 20, skip = 0 } = {})
   // Use POST /contacts/search with tag filter (GHL v2 search endpoint)
   const body = {
     locationId,
-    pageSize: limit,
+    pageLimit: limit,
     query: "",
     filters: [{ group: "AND", filters: tagList.map((t) => ({ field: "tags", operator: "contains", value: t })) }],
   };
