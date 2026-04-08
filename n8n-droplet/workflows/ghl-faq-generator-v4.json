@@ -1,0 +1,444 @@
+{
+  "name": "GHL FAQ Generator v4",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://services.leadconnectorhq.com/contacts/",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {"name": "locationId", "value": "x7nLyDSHiewYRtwYlX0h"},
+            {"name": "limit", "value": "100"},
+            {"name": "tag", "value": "platinum"}
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "=Bearer {{ $env.GHL_LOCATION_API_KEY }}"},
+            {"name": "Version", "value": "2021-07-28"}
+          ]
+        },
+        "options": {}
+      },
+      "name": "Get Platinum Contacts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, 200]
+    },
+    {
+      "parameters": {
+        "url": "https://services.leadconnectorhq.com/contacts/",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {"name": "locationId", "value": "x7nLyDSHiewYRtwYlX0h"},
+            {"name": "limit", "value": "100"},
+            {"name": "tag", "value": "software subscription"}
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "=Bearer {{ $env.GHL_LOCATION_API_KEY }}"},
+            {"name": "Version", "value": "2021-07-28"}
+          ]
+        },
+        "options": {}
+      },
+      "name": "Get Software Sub Contacts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, 400]
+    },
+    {
+      "parameters": {
+        "mode": "append"
+      },
+      "name": "Merge Contacts",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const allItems = $input.all();\nconst allContacts = [];\nconst seen = new Set();\nfor (const item of allItems) {\n  const contacts = item.json.contacts || [];\n  for (const c of contacts) {\n    if (!seen.has(c.id)) {\n      seen.add(c.id);\n      allContacts.push({ id: c.id, firstName: c.firstName || '', lastName: c.lastName || '', email: c.email || '', phone: c.phone || '', tags: c.tags || [] });\n    }\n  }\n}\n// Initialize static data for Q&A storage\nconst staticData = $getWorkflowStaticData('global');\nstaticData.allQuestions = [];\nreturn allContacts.slice(0, 6).map(c => ({ json: c }));"
+      },
+      "name": "Deduplicate Contacts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "name": "Loop Contacts",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [940, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://services.leadconnectorhq.com/conversations/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {"name": "locationId", "value": "x7nLyDSHiewYRtwYlX0h"},
+            {"name": "contactId", "value": "={{ $json.id }}"},
+            {"name": "limit", "value": "5"}
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "=Bearer {{ $env.GHL_LOCATION_API_KEY }}"},
+            {"name": "Version", "value": "2021-07-28"}
+          ]
+        },
+        "options": {}
+      },
+      "name": "Get Conversations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1160, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the current batch contact from the loop\nconst batchItem = $('Loop Contacts').first().json;\nconst convResponse = $input.first().json;\nconst conversations = convResponse.conversations || [];\nif (conversations.length > 0) {\n  return [{\n    json: {\n      contactId: batchItem.id || '',\n      contactName: ((batchItem.firstName || '') + ' ' + (batchItem.lastName || '')).trim() || 'Unknown',\n      contactEmail: batchItem.email || '',\n      contactTags: batchItem.tags || [],\n      conversationId: conversations[0].id,\n      hasConversation: true\n    }\n  }];\n} else {\n  return [{\n    json: {\n      contactId: batchItem.id || '',\n      contactName: ((batchItem.firstName || '') + ' ' + (batchItem.lastName || '')).trim() || 'Unknown',\n      contactEmail: batchItem.email || '',\n      contactTags: batchItem.tags || [],\n      conversationId: '',\n      hasConversation: false\n    }\n  }];\n}"
+      },
+      "name": "Process Conversations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1380, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
+          "conditions": [
+            {
+              "id": "has-conv",
+              "leftValue": "={{ $json.hasConversation }}",
+              "rightValue": true,
+              "operator": {"type": "boolean", "operation": "equals"}
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Has Conversation?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1600, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://services.leadconnectorhq.com/conversations/{{ $json.conversationId }}/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {"name": "limit", "value": "100"}
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "=Bearer {{ $env.GHL_LOCATION_API_KEY }}"},
+            {"name": "Version", "value": "2021-07-28"}
+          ]
+        },
+        "options": {}
+      },
+      "name": "Get Messages",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1820, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const contact = $('Process Conversations').first().json;\nconst raw = $input.first().json;\nif (!raw || !raw.messages) {\n  return [{ json: { contactName: contact.contactName, contactTags: contact.contactTags, transcript: '', hasTranscript: false } }];\n}\nconst msgArray = raw.messages.messages || [];\nconst messages = msgArray\n  .filter(m => m && ['TYPE_SMS', 'TYPE_EMAIL'].includes(m.messageType) && m.body)\n  .sort((a, b) => new Date(a.dateAdded) - new Date(b.dateAdded));\nif (messages.length === 0) {\n  return [{ json: { contactName: contact.contactName, contactTags: contact.contactTags, transcript: '', hasTranscript: false } }];\n}\nlet transcript = 'Contact: ' + contact.contactName + ' (' + contact.contactEmail + ')\\nTags: ' + contact.contactTags.join(', ') + '\\n\\n--- CONVERSATION ---\\n\\n';\nfor (const msg of messages) {\n  const speaker = msg.direction === 'inbound' ? '[CUSTOMER - ' + contact.contactName + ']' : '[GM BAPTIST TEAM]';\n  const body = msg.body.length > 500 ? msg.body.substring(0, 500) + '...' : msg.body;\n  const msgType = msg.messageType === 'TYPE_SMS' ? 'SMS' : 'Email';\n  transcript += speaker + ' (' + msgType + ', ' + msg.dateAdded + '):\\n' + body + '\\n\\n';\n}\nif (transcript.length > 8000) transcript = transcript.substring(0, 8000) + '\\n\\n[TRUNCATED]';\nreturn [{ json: { contactName: contact.contactName, contactTags: contact.contactTags, transcript: transcript, hasTranscript: true } }];"
+      },
+      "name": "Format Transcript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2040, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
+          "conditions": [
+            {
+              "id": "has-transcript",
+              "leftValue": "={{ $json.hasTranscript }}",
+              "rightValue": true,
+              "operator": {"type": "boolean", "operation": "equals"}
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Has Transcript?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2260, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst prompt = 'You are analyzing customer support conversations for GM Baptist Outreach, a church SaaS platform. Extract QUESTIONS the customer asked and ANSWERS given by the team.\\n\\nRules:\\n- Only extract genuine questions from the CUSTOMER (inbound messages)\\n- Skip greetings, thank yous, confirmations\\n- For each question include the team answer if given\\n- If no real questions return {\"questions\": []}\\n\\nReturn ONLY valid JSON:\\n{\"questions\": [{\"question\": \"...\", \"answer\": \"...\", \"topic\": \"...\"}]}\\n\\nTranscript:\\n\\n' + item.transcript;\nreturn [{\n  json: {\n    contactName: item.contactName,\n    contactTags: item.contactTags,\n    requestBody: {\n      model: 'claude-sonnet-4-20250514',\n      max_tokens: 2000,\n      messages: [{ role: 'user', content: prompt }]\n    }\n  }\n}];"
+      },
+      "name": "Prepare Q&A Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2480, 100]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}"},
+            {"name": "anthropic-version", "value": "2023-06-01"},
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {}
+      },
+      "name": "Claude Extract Q&A",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2700, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "const claudeResponse = $input.first().json;\nconst prepData = $('Prepare Q&A Request').first().json;\nlet qaData = { questions: [] };\ntry {\n  const text = claudeResponse.content[0].text;\n  const match = text.match(/\\{[\\s\\S]*\\}/);\n  if (match) qaData = JSON.parse(match[0]);\n} catch (e) {}\n\n// Store in workflow static data\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.allQuestions) staticData.allQuestions = [];\nfor (const q of (qaData.questions || [])) {\n  staticData.allQuestions.push({\n    question: q.question,\n    answer: q.answer,\n    topic: q.topic,\n    contactName: prepData.contactName,\n    contactTags: prepData.contactTags\n  });\n}\nreturn [{ json: { stored: true, questionsInBatch: (qaData.questions || []).length, totalSoFar: staticData.allQuestions.length } }];"
+      },
+      "name": "Parse and Store Q&A",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2920, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// No-op pass through — just loop back\nreturn [{ json: { skipped: true } }];"
+      },
+      "name": "Skip to Next",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2260, 450]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect all stored Q&As after loop completes\nconst staticData = $getWorkflowStaticData('global');\nconst allQuestions = staticData.allQuestions || [];\nstaticData.allQuestions = [];\nreturn [{ json: { totalQuestions: allQuestions.length, questions: allQuestions } }];"
+      },
+      "name": "Aggregate Q&As",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [940, 550]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nif (data.totalQuestions === 0) {\n  return [{ json: { totalQuestions: 0, requestBody: { model: 'claude-sonnet-4-20250514', max_tokens: 1000, messages: [{ role: 'user', content: 'No questions were found. Return: {\"faq_categories\": [], \"support_gaps\": [], \"summary\": {\"total_unique_questions\": 0, \"top_3_topics\": [], \"insight\": \"No customer questions were found in the analyzed conversations.\"}}' }] } } }];\n}\nconst questionsStr = JSON.stringify(data.questions).substring(0, 12000);\nconst prompt = 'You are a business analyst for GM Baptist Outreach, a church SaaS platform that provides Facebook ad campaigns, automated texting, websites, and software tools for Baptist churches.\\n\\nBelow are questions from real customer conversations. Your job:\\n1. GROUP similar questions (deduplicate)\\n2. CATEGORIZE into FAQ sections\\n3. RANK by frequency (most common first)\\n4. Write CLEAR FAQ answers\\n5. Flag UNANSWERED questions as support gaps\\n\\nReturn JSON:\\n{\"faq_categories\": [{\"category\": \"...\", \"questions\": [{\"question\": \"...\", \"answer\": \"...\", \"frequency\": 1, \"source_contacts\": []}]}], \"support_gaps\": [{\"question\": \"...\", \"recommendation\": \"...\"}], \"summary\": {\"total_unique_questions\": 0, \"top_3_topics\": [], \"insight\": \"...\"}}\\n\\nQ&A pairs:\\n' + questionsStr;\nreturn [{ json: { totalQuestions: data.totalQuestions, requestBody: { model: 'claude-sonnet-4-20250514', max_tokens: 4000, messages: [{ role: 'user', content: prompt }] } } }];"
+      },
+      "name": "Prepare Categorize Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1160, 550]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}"},
+            {"name": "anthropic-version", "value": "2023-06-01"},
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {}
+      },
+      "name": "Claude Categorize",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1380, 550]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst aggregate = $('Aggregate Q&As').first().json;\nlet faqData = {};\ntry {\n  const text = item.content[0].text;\n  const match = text.match(/\\{[\\s\\S]*\\}/);\n  if (match) faqData = JSON.parse(match[0]);\n} catch (e) {\n  faqData = { error: 'Failed to parse', raw: item.content && item.content[0] ? item.content[0].text : '' };\n}\nreturn [{ json: { generatedAt: new Date().toISOString(), totalContactsAnalyzed: $('Deduplicate Contacts').all().length, totalQuestionsExtracted: aggregate.totalQuestions, ...faqData } }];"
+      },
+      "name": "Format Final FAQ",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1600, 550]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {"node": "Get Platinum Contacts", "type": "main", "index": 0},
+          {"node": "Get Software Sub Contacts", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Get Platinum Contacts": {
+      "main": [
+        [
+          {"node": "Merge Contacts", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Get Software Sub Contacts": {
+      "main": [
+        [
+          {"node": "Merge Contacts", "type": "main", "index": 1}
+        ]
+      ]
+    },
+    "Merge Contacts": {
+      "main": [
+        [
+          {"node": "Deduplicate Contacts", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Deduplicate Contacts": {
+      "main": [
+        [
+          {"node": "Loop Contacts", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Loop Contacts": {
+      "main": [
+        [
+          {"node": "Get Conversations", "type": "main", "index": 0}
+        ],
+        [
+          {"node": "Aggregate Q&As", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Get Conversations": {
+      "main": [
+        [
+          {"node": "Process Conversations", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Process Conversations": {
+      "main": [
+        [
+          {"node": "Has Conversation?", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Has Conversation?": {
+      "main": [
+        [
+          {"node": "Get Messages", "type": "main", "index": 0}
+        ],
+        [
+          {"node": "Skip to Next", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Get Messages": {
+      "main": [
+        [
+          {"node": "Format Transcript", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Format Transcript": {
+      "main": [
+        [
+          {"node": "Has Transcript?", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Has Transcript?": {
+      "main": [
+        [
+          {"node": "Prepare Q&A Request", "type": "main", "index": 0}
+        ],
+        [
+          {"node": "Skip to Next", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Prepare Q&A Request": {
+      "main": [
+        [
+          {"node": "Claude Extract Q&A", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Claude Extract Q&A": {
+      "main": [
+        [
+          {"node": "Parse and Store Q&A", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Parse and Store Q&A": {
+      "main": [
+        [
+          {"node": "Loop Contacts", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Skip to Next": {
+      "main": [
+        [
+          {"node": "Loop Contacts", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Aggregate Q&As": {
+      "main": [
+        [
+          {"node": "Prepare Categorize Request", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Prepare Categorize Request": {
+      "main": [
+        [
+          {"node": "Claude Categorize", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Claude Categorize": {
+      "main": [
+        [
+          {"node": "Format Final FAQ", "type": "main", "index": 0}
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
