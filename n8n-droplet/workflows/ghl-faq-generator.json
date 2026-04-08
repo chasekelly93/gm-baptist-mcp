@@ -1,0 +1,305 @@
+{
+  "name": "GHL Conversation FAQ Generator",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-1",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuration\nconst locationId = 'x7nLyDSHiewYRtwYlX0h';\nconst tags = ['platinum', 'software subscription'];\nconst ghlApiKey = $env.GHL_LOCATION_API_KEY;\n\nlet allContacts = [];\n\nfor (const tag of tags) {\n  let skip = 0;\n  const limit = 100;\n  let hasMore = true;\n  \n  while (hasMore) {\n    const url = `https://services.leadconnectorhq.com/contacts/?locationId=${locationId}&limit=${limit}${skip ? '&skip=' + skip : ''}&query=&tag=${encodeURIComponent(tag)}`;\n    \n    const response = await fetch(url, {\n      headers: {\n        'Authorization': `Bearer ${ghlApiKey}`,\n        'Version': '2021-07-28',\n        'Accept': 'application/json'\n      }\n    });\n    \n    const data = await response.json();\n    const contacts = data.contacts || [];\n    \n    for (const c of contacts) {\n      if (!allContacts.find(existing => existing.id === c.id)) {\n        allContacts.push({\n          id: c.id,\n          firstName: c.firstName || '',\n          lastName: c.lastName || '',\n          email: c.email || '',\n          phone: c.phone || '',\n          tags: c.tags || []\n        });\n      }\n    }\n    \n    skip += limit;\n    hasMore = contacts.length === limit;\n  }\n}\n\nreturn allContacts.map(c => ({ json: c }));"
+      },
+      "id": "fetch-contacts-1",
+      "name": "Fetch Tagged Contacts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "batchSize": 5,
+        "options": {}
+      },
+      "id": "loop-1",
+      "name": "Loop Over Contacts",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const contact = $input.first().json;\nconst locationId = 'x7nLyDSHiewYRtwYlX0h';\nconst ghlApiKey = $env.GHL_LOCATION_API_KEY;\n\n// Get conversations for this contact\nconst convUrl = `https://services.leadconnectorhq.com/conversations/search?locationId=${locationId}&contactId=${contact.id}&limit=5`;\nconst convResponse = await fetch(convUrl, {\n  method: 'GET',\n  headers: {\n    'Authorization': `Bearer ${ghlApiKey}`,\n    'Version': '2021-07-28',\n    'Accept': 'application/json'\n  }\n});\nconst convData = await convResponse.json();\nconst conversations = convData.conversations || [];\n\nlet allMessages = [];\n\nfor (const conv of conversations) {\n  // Get messages for each conversation\n  const msgUrl = `https://services.leadconnectorhq.com/conversations/${conv.id}/messages?limit=100`;\n  const msgResponse = await fetch(msgUrl, {\n    headers: {\n      'Authorization': `Bearer ${ghlApiKey}`,\n      'Version': '2021-07-28',\n      'Accept': 'application/json'\n    }\n  });\n  const msgData = await msgResponse.json();\n  const messages = msgData.messages || [];\n  \n  // Filter to SMS and email only, skip system messages\n  const filtered = messages\n    .filter(m => ['TYPE_SMS', 'TYPE_EMAIL'].includes(m.type) && m.body)\n    .map(m => ({\n      type: m.type === 'TYPE_SMS' ? 'SMS' : 'Email',\n      direction: m.direction || 'outbound',\n      body: m.body.substring(0, 2000),\n      date: m.dateAdded\n    }));\n  \n  allMessages = allMessages.concat(filtered);\n}\n\n// Sort by date\nallMessages.sort((a, b) => new Date(a.date) - new Date(b.date));\n\nreturn [{\n  json: {\n    contactId: contact.id,\n    contactName: `${contact.firstName} ${contact.lastName}`.trim(),\n    contactEmail: contact.email,\n    contactTags: contact.tags,\n    messageCount: allMessages.length,\n    messages: allMessages\n  }\n}];"
+      },
+      "id": "fetch-messages-1",
+      "name": "Fetch Conversation Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "filter-msg-count",
+              "leftValue": "={{ $json.messageCount }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-1",
+      "name": "Has Messages?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst messages = item.messages || [];\n\n// Build a conversation transcript\nlet transcript = `Contact: ${item.contactName} (${item.contactEmail})\\nTags: ${item.contactTags.join(', ')}\\n\\n--- CONVERSATION ---\\n\\n`;\n\nfor (const msg of messages) {\n  const speaker = msg.direction === 'inbound' ? `[CUSTOMER - ${item.contactName}]` : '[GM BAPTIST TEAM]';\n  // Truncate long emails\n  const body = msg.body.length > 500 ? msg.body.substring(0, 500) + '...' : msg.body;\n  transcript += `${speaker} (${msg.type}, ${msg.date}):\\n${body}\\n\\n`;\n}\n\n// Truncate overall transcript to ~8000 chars to fit in Claude context\nif (transcript.length > 8000) {\n  transcript = transcript.substring(0, 8000) + '\\n\\n[TRUNCATED]';\n}\n\nreturn [{\n  json: {\n    contactId: item.contactId,\n    contactName: item.contactName,\n    contactTags: item.contactTags,\n    messageCount: item.messageCount,\n    transcript: transcript\n  }\n}];"
+      },
+      "id": "format-transcript-1",
+      "name": "Format Transcript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 2000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"You are analyzing customer support conversations for GM Baptist Outreach, a church SaaS platform. Your job is to extract QUESTIONS that the customer asked and the ANSWERS given by the GM Baptist team.\\n\\nRules:\\n- Only extract genuine questions or requests for help from the CUSTOMER (inbound messages)\\n- Skip greetings, thank yous, confirmations like 'Ok' or 'Done' or 'Thanks'\\n- Skip outbound marketing/training emails — only note them if the customer asked a question IN RESPONSE\\n- For each question, include the team's answer if one was given\\n- If no real questions exist in this conversation, return {\\\"questions\\\": []}\\n\\nReturn ONLY valid JSON in this format:\\n{\\n  \\\"questions\\\": [\\n    {\\n      \\\"question\\\": \\\"The customer's actual question or request\\\",\\n      \\\"answer\\\": \\\"How the team responded (or 'No direct answer given')\\\",\\n      \\\"topic\\\": \\\"Brief topic label (e.g. Ad Campaigns, Billing, Website, Software Setup, Texting/SMS, Reporting, Video Recording)\\\"\\n    }\\n  ]\\n}\\n\\nHere is the conversation transcript:\\n\\n{{ $json.transcript }}\"\n    }\n  ]\n}"
+      },
+      "id": "claude-extract-1",
+      "name": "Claude: Extract Q&A",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst prevItem = $('Format Transcript').first().json;\n\n// Parse Claude's response\nlet qaData = { questions: [] };\ntry {\n  const content = item.content[0].text;\n  // Find JSON in the response\n  const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    qaData = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  // If parsing fails, skip this contact\n}\n\nreturn [{\n  json: {\n    contactName: prevItem.contactName,\n    contactTags: prevItem.contactTags,\n    questions: qaData.questions || []\n  }\n}];"
+      },
+      "id": "parse-qa-1",
+      "name": "Parse Q&A Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Collect all Q&A pairs from all contacts\nconst allItems = $('Parse Q&A Response').all();\nlet allQuestions = [];\n\nfor (const item of allItems) {\n  const questions = item.json.questions || [];\n  for (const q of questions) {\n    allQuestions.push({\n      question: q.question,\n      answer: q.answer,\n      topic: q.topic,\n      contactName: item.json.contactName,\n      contactTags: item.json.contactTags\n    });\n  }\n}\n\nreturn [{\n  json: {\n    totalQuestions: allQuestions.length,\n    questions: allQuestions\n  }\n}];"
+      },
+      "id": "aggregate-1",
+      "name": "Aggregate All Q&As",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 100]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 4000,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"You are a business analyst for GM Baptist Outreach, a church SaaS platform that provides Facebook ad campaigns, automated texting, websites, and software tools for Baptist churches.\\n\\nBelow is a collection of questions extracted from real customer conversations. Your job is to:\\n\\n1. GROUP similar questions together (deduplicate)\\n2. CATEGORIZE them into logical FAQ sections\\n3. RANK by frequency (most common questions first within each category)\\n4. Write a CLEAR FAQ answer for each, based on the team answers provided and your understanding of the service\\n5. Flag any questions that were left UNANSWERED or poorly answered — these are support gaps\\n\\nReturn the output as structured JSON:\\n{\\n  \\\"faq_categories\\\": [\\n    {\\n      \\\"category\\\": \\\"Category Name\\\",\\n      \\\"questions\\\": [\\n        {\\n          \\\"question\\\": \\\"The FAQ question\\\",\\n          \\\"answer\\\": \\\"The recommended FAQ answer\\\",\\n          \\\"frequency\\\": number_of_times_asked,\\n          \\\"source_contacts\\\": [\\\"Name1\\\", \\\"Name2\\\"]\\n        }\\n      ]\\n    }\\n  ],\\n  \\\"support_gaps\\\": [\\n    {\\n      \\\"question\\\": \\\"Question that was unanswered or poorly handled\\\",\\n      \\\"recommendation\\\": \\\"What the team should do about this\\\"\\n    }\\n  ],\\n  \\\"summary\\\": {\\n    \\\"total_unique_questions\\\": number,\\n    \\\"top_3_topics\\\": [\\\"topic1\\\", \\\"topic2\\\", \\\"topic3\\\"],\\n    \\\"insight\\\": \\\"One paragraph summary of what customers ask about most and what it means for the business\\\"\\n  }\\n}\\n\\nHere are the extracted Q&A pairs:\\n\\n{{ JSON.stringify($json.questions).substring(0, 12000) }}\"\n    }\n  ]\n}"
+      },
+      "id": "claude-categorize-1",
+      "name": "Claude: Categorize FAQ",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first().json;\nconst aggregate = $('Aggregate All Q&As').first().json;\n\nlet faqData = {};\ntry {\n  const content = item.content[0].text;\n  const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n  if (jsonMatch) {\n    faqData = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  faqData = { error: 'Failed to parse FAQ response', raw: item.content?.[0]?.text || 'No content' };\n}\n\nreturn [{\n  json: {\n    generatedAt: new Date().toISOString(),\n    totalContactsAnalyzed: $('Fetch Tagged Contacts').all().length,\n    totalQuestionsExtracted: aggregate.totalQuestions,\n    ...faqData\n  }\n}];"
+      },
+      "id": "format-output-1",
+      "name": "Format Final FAQ",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 100]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Tagged Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Tagged Contacts": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Contacts": {
+      "main": [
+        [
+          {
+            "node": "Fetch Conversation Messages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Aggregate All Q&As",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Conversation Messages": {
+      "main": [
+        [
+          {
+            "node": "Has Messages?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Messages?": {
+      "main": [
+        [
+          {
+            "node": "Format Transcript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Transcript": {
+      "main": [
+        [
+          {
+            "node": "Claude: Extract Q&A",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Extract Q&A": {
+      "main": [
+        [
+          {
+            "node": "Parse Q&A Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Q&A Response": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate All Q&As": {
+      "main": [
+        [
+          {
+            "node": "Claude: Categorize FAQ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Categorize FAQ": {
+      "main": [
+        [
+          {
+            "node": "Format Final FAQ",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    {
+      "name": "AI",
+      "id": "ai-tag"
+    },
+    {
+      "name": "GHL",
+      "id": "ghl-tag"
+    }
+  ]
+}
