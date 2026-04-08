@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
 # n8n Droplet Setup Script
-# Run on a fresh Ubuntu 22.04 DigitalOcean Droplet
+# Run on a fresh Ubuntu 24.04 LTS DigitalOcean Droplet
 #
 # Usage:
 #   1. scp this entire n8n-droplet/ folder to your Droplet
@@ -23,14 +23,27 @@ echo "============================================"
 echo "  n8n Droplet Setup — $(date)"
 echo "============================================"
 
-# --- 1. System updates ---
+# --- 1. System updates + swap ---
 echo ""
-echo "[1/7] Updating system packages..."
+echo "[1/8] Updating system packages..."
 apt-get update -y && apt-get upgrade -y
+
+# Add 2GB swap for stability on smaller Droplets
+if [ ! -f /swapfile ]; then
+  echo "  Creating 2GB swap file..."
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+  echo "  Swap enabled."
+else
+  echo "  Swap already exists."
+fi
 
 # --- 2. Install Docker ---
 echo ""
-echo "[2/7] Installing Docker..."
+echo "[2/8] Installing Docker..."
 if ! command -v docker &> /dev/null; then
   apt-get install -y ca-certificates curl gnupg
   install -m 0755 -d /etc/apt/keyrings
@@ -50,22 +63,22 @@ fi
 
 # --- 3. Install Nginx ---
 echo ""
-echo "[3/7] Installing Nginx..."
+echo "[3/8] Installing Nginx..."
 apt-get install -y nginx
 systemctl enable nginx
 
 # --- 4. Configure Nginx ---
 echo ""
-echo "[4/7] Configuring Nginx reverse proxy..."
+echo "[4/8] Configuring Nginx reverse proxy..."
 cp nginx/n8n.conf /etc/nginx/sites-available/n8n.conf
 ln -sf /etc/nginx/sites-available/n8n.conf /etc/nginx/sites-enabled/n8n.conf
 rm -f /etc/nginx/sites-enabled/default
 
 # Temporarily use HTTP-only config for Certbot challenge
-cat > /etc/nginx/sites-available/n8n.conf <<'TEMPNGINX'
+cat > /etc/nginx/sites-available/n8n.conf <<TEMPNGINX
 server {
     listen 80;
-    server_name n8n.gmbaptistoutreach.com;
+    server_name ${N8N_HOST};
 
     location /.well-known/acme-challenge/ {
         root /var/www/certbot;
@@ -83,26 +96,26 @@ nginx -t && systemctl restart nginx
 
 # --- 5. SSL with Certbot ---
 echo ""
-echo "[5/7] Setting up Let's Encrypt SSL..."
+echo "[5/8] Setting up Let's Encrypt SSL..."
 apt-get install -y certbot python3-certbot-nginx
 
 echo "  Requesting certificate for ${N8N_HOST}..."
 certbot --nginx -d "${N8N_HOST}" --non-interactive --agree-tos -m "${SSL_EMAIL}" --redirect
 
-# Now install the full Nginx config
-cp nginx/n8n.conf /etc/nginx/sites-available/n8n.conf
-
-# Certbot may have modified the config — let it manage renewals
-# but ensure our proxy settings are in place
+# --- 6. Install full Nginx proxy config ---
+echo ""
+echo "[6/8] Writing final Nginx proxy config..."
+# Replace the placeholder domain in our template with the actual N8N_HOST
+sed "s/n8n.gmbaptistoutreach.com/${N8N_HOST}/g" nginx/n8n.conf > /etc/nginx/sites-available/n8n.conf
 nginx -t && systemctl reload nginx
 
 # Set up auto-renewal
 systemctl enable certbot.timer
 echo "  SSL certificate installed and auto-renewal enabled."
 
-# --- 6. Configure firewall ---
+# --- 7. Configure firewall ---
 echo ""
-echo "[6/7] Configuring UFW firewall..."
+echo "[7/8] Configuring UFW firewall..."
 ufw allow OpenSSH
 ufw allow 'Nginx Full'
 # Block direct access to n8n port — force traffic through Nginx
@@ -110,9 +123,9 @@ ufw deny 5678
 echo "y" | ufw enable
 ufw status
 
-# --- 7. Start n8n ---
+# --- 8. Start n8n ---
 echo ""
-echo "[7/7] Starting n8n with Docker Compose..."
+echo "[8/8] Starting n8n with Docker Compose..."
 docker compose up -d
 
 echo ""
