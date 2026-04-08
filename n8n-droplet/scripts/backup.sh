@@ -16,17 +16,24 @@ echo "[backup] Starting n8n backup — ${TIMESTAMP}"
 # --- 1. Export workflows via n8n CLI inside the container ---
 mkdir -p "${BACKUP_DIR}/workflows" "${BACKUP_DIR}/credentials"
 
-# Export all workflows
-docker exec n8n n8n export:workflow --all --output="/home/node/.n8n/backups/workflows/" 2>/dev/null || true
+# Export all workflows to a single JSON file
+docker exec n8n n8n export:workflow --all --output="/home/node/.n8n/backups/workflows.json" 2>/dev/null || true
 
 # Export all credentials (encrypted with N8N_ENCRYPTION_KEY)
-docker exec n8n n8n export:credentials --all --output="/home/node/.n8n/backups/credentials/" 2>/dev/null || true
+docker exec n8n n8n export:credentials --all --output="/home/node/.n8n/backups/credentials.json" 2>/dev/null || true
 
 # Copy from Docker volume to host
 VOLUME_PATH=$(docker volume inspect n8n-droplet_n8n_data --format '{{ .Mountpoint }}')
-if [ -d "${VOLUME_PATH}/backups" ]; then
-  cp -r "${VOLUME_PATH}/backups/workflows/"* "${BACKUP_DIR}/workflows/" 2>/dev/null || true
-  cp -r "${VOLUME_PATH}/backups/credentials/"* "${BACKUP_DIR}/credentials/" 2>/dev/null || true
+if [ -f "${VOLUME_PATH}/backups/workflows.json" ]; then
+  cp "${VOLUME_PATH}/backups/workflows.json" "${BACKUP_DIR}/workflows/" 2>/dev/null || true
+fi
+if [ -f "${VOLUME_PATH}/backups/credentials.json" ]; then
+  cp "${VOLUME_PATH}/backups/credentials.json" "${BACKUP_DIR}/credentials/" 2>/dev/null || true
+fi
+
+# Also back up the entire n8n database as a fallback
+if [ -f "${VOLUME_PATH}/database.sqlite" ]; then
+  cp "${VOLUME_PATH}/database.sqlite" "${BACKUP_DIR}/database.sqlite" 2>/dev/null || true
 fi
 
 # --- 2. Push to GitHub ---
@@ -41,11 +48,12 @@ cd "${BACKUP_DIR}"
 if [ ! -d .git ]; then
   git init
   git remote add origin "https://${GITHUB_BACKUP_TOKEN}@github.com/${GITHUB_BACKUP_REPO}.git"
-  git branch -M main
+  # Pull existing content from remote first
+  git fetch origin main 2>/dev/null && git checkout main 2>/dev/null || git checkout -b main
 fi
 
 git add -A
-git commit -m "backup: ${TIMESTAMP}" || echo "[backup] No changes to commit."
+git commit -m "backup: ${TIMESTAMP}" || { echo "[backup] No changes to commit."; exit 0; }
 git push -u origin main || echo "[backup] Push failed — check token/repo permissions."
 
 echo "[backup] Complete — ${TIMESTAMP}"
