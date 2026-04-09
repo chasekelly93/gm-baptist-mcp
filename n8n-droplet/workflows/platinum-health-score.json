@@ -1,0 +1,365 @@
+{
+  "name": "Platinum Client Health Score",
+  "nodes": [
+    {
+      "parameters": {},
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://services.leadconnectorhq.com/contacts/",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {"name": "locationId", "value": "x7nLyDSHiewYRtwYlX0h"},
+            {"name": "limit", "value": "100"},
+            {"name": "tag", "value": "platinum"}
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "=Bearer {{ $env.GHL_LOCATION_API_KEY }}"},
+            {"name": "Version", "value": "2021-07-28"}
+          ]
+        },
+        "options": {"retry": {"maxTries": 3, "waitBetweenTries": 5000}}
+      },
+      "name": "Get Platinum Contacts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\nconst contacts = response.contacts || [];\nconst staticData = $getWorkflowStaticData('global');\nstaticData.allScores = [];\nreturn contacts.map(c => ({ json: { id: c.id, firstName: c.firstName || '', lastName: c.lastName || '', email: c.email || '', phone: c.phone || '', tags: c.tags || [] } }));"
+      },
+      "name": "Extract Contacts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [470, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "name": "Loop Contacts",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [690, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://services.leadconnectorhq.com/conversations/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {"name": "locationId", "value": "x7nLyDSHiewYRtwYlX0h"},
+            {"name": "contactId", "value": "={{ $json.id }}"},
+            {"name": "limit", "value": "5"}
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "=Bearer {{ $env.GHL_LOCATION_API_KEY }}"},
+            {"name": "Version", "value": "2021-07-28"}
+          ]
+        },
+        "options": {}
+      },
+      "name": "Get Conversations",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [910, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const batchItem = $('Loop Contacts').first().json;\nconst convResponse = $input.first().json;\nconst conversations = convResponse.conversations || [];\nreturn [{\n  json: {\n    contactId: batchItem.id || '',\n    contactName: ((batchItem.firstName || '') + ' ' + (batchItem.lastName || '')).trim() || 'Unknown',\n    contactEmail: batchItem.email || '',\n    contactPhone: batchItem.phone || '',\n    contactTags: batchItem.tags || [],\n    conversationId: conversations.length > 0 ? conversations[0].id : '',\n    hasConversation: conversations.length > 0\n  }\n}];"
+      },
+      "name": "Process Conversations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1130, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
+          "conditions": [
+            {
+              "id": "has-conv",
+              "leftValue": "={{ $json.hasConversation }}",
+              "rightValue": true,
+              "operator": {"type": "boolean", "operation": "equals"}
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Has Conversation?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1350, 300]
+    },
+    {
+      "parameters": {
+        "url": "=https://services.leadconnectorhq.com/conversations/{{ $json.conversationId }}/messages",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {"name": "limit", "value": "100"}
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "=Bearer {{ $env.GHL_LOCATION_API_KEY }}"},
+            {"name": "Version", "value": "2021-07-28"}
+          ]
+        },
+        "options": {}
+      },
+      "name": "Get Messages",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1570, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const contact = $('Process Conversations').first().json;\nconst raw = $input.first().json;\nconst now = new Date();\nconst thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);\n\nlet msgArray = [];\nif (raw && raw.messages && raw.messages.messages) {\n  msgArray = raw.messages.messages;\n}\n\nconst realMessages = msgArray.filter(m => m && ['TYPE_SMS', 'TYPE_EMAIL'].includes(m.messageType) && m.body);\n\nconst inboundMsgs = realMessages.filter(m => m.direction === 'inbound').sort((a, b) => new Date(b.dateAdded) - new Date(a.dateAdded));\nconst lastInbound = inboundMsgs.length > 0 ? new Date(inboundMsgs[0].dateAdded) : null;\nconst daysSinceInbound = lastInbound ? Math.floor((now - lastInbound) / (1000 * 60 * 60 * 24)) : -1;\n\nconst outboundMsgs = realMessages.filter(m => m.direction === 'outbound').sort((a, b) => new Date(b.dateAdded) - new Date(a.dateAdded));\nconst lastOutbound = outboundMsgs.length > 0 ? new Date(outboundMsgs[0].dateAdded) : null;\nconst daysSinceOutbound = lastOutbound ? Math.floor((now - lastOutbound) / (1000 * 60 * 60 * 24)) : -1;\n\nconst messagesLast30d = realMessages.filter(m => new Date(m.dateAdded) >= thirtyDaysAgo).length;\n\nconst opportunityMsgs = msgArray.filter(m => m.messageType === 'TYPE_ACTIVITY_OPPORTUNITY' && new Date(m.dateAdded) >= thirtyDaysAgo);\nconst hasActiveCampaign = opportunityMsgs.length > 0;\n\nlet score = 0;\nconst dsi = daysSinceInbound === -1 ? 999 : daysSinceInbound;\nconst dso = daysSinceOutbound === -1 ? 999 : daysSinceOutbound;\n\nif (dsi <= 7) score += 25; else if (dsi <= 14) score += 20; else if (dsi <= 30) score += 10;\nif (dso <= 3) score += 15; else if (dso <= 7) score += 12; else if (dso <= 14) score += 8;\nif (messagesLast30d >= 10) score += 20; else if (messagesLast30d >= 5) score += 15; else if (messagesLast30d >= 1) score += 10;\nif (hasActiveCampaign) score += 20;\nif (dsi <= 7) score += 20; else if (dsi <= 14) score += 15; else if (dsi <= 30) score += 10;\n\nlet tier = 'Critical';\nif (score >= 80) tier = 'Healthy';\nelse if (score >= 60) tier = 'Monitor';\nelse if (score >= 40) tier = 'At Risk';\n\nreturn [{ json: {\n  contact_id: contact.contactId,\n  contact_name: contact.contactName,\n  contact_email: contact.contactEmail,\n  contact_phone: contact.contactPhone,\n  health_score: score,\n  health_tier: tier,\n  days_since_inbound: daysSinceInbound,\n  days_since_outbound: daysSinceOutbound,\n  messages_last_30d: messagesLast30d,\n  has_active_campaign: hasActiveCampaign,\n  client_initiated_days: daysSinceInbound,\n  ai_recommendation: ''\n} }];"
+      },
+      "name": "Calculate Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1790, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "const contact = $('Process Conversations').first().json;\nreturn [{ json: {\n  contact_id: contact.contactId,\n  contact_name: contact.contactName,\n  contact_email: contact.contactEmail,\n  contact_phone: contact.contactPhone,\n  health_score: 0,\n  health_tier: 'Critical',\n  days_since_inbound: -1,\n  days_since_outbound: -1,\n  messages_last_30d: 0,\n  has_active_campaign: false,\n  client_initiated_days: -1,\n  ai_recommendation: 'No conversation history found. Reach out immediately.'\n} }];"
+      },
+      "name": "Score Zero",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1570, 450]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.allScores) staticData.allScores = [];\nstaticData.allScores.push({\n  contact_name: data.contact_name,\n  contact_email: data.contact_email,\n  health_score: data.health_score,\n  health_tier: data.health_tier,\n  days_since_inbound: data.days_since_inbound,\n  messages_last_30d: data.messages_last_30d,\n  has_active_campaign: data.has_active_campaign\n});\nreturn [{ json: data }];"
+      },
+      "name": "Store Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2010, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://xbxwvfnrqrjobalkmbeu.supabase.co/rest/v1/platinum_health_scores",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}"},
+            {"name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}"},
+            {"name": "Content-Type", "value": "application/json"},
+            {"name": "Prefer", "value": "return=minimal"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contact_id: $json.contact_id, contact_name: $json.contact_name, contact_email: $json.contact_email, contact_phone: $json.contact_phone, health_score: $json.health_score, health_tier: $json.health_tier, days_since_inbound: $json.days_since_inbound, days_since_outbound: $json.days_since_outbound, messages_last_30d: $json.messages_last_30d, has_active_campaign: $json.has_active_campaign, client_initiated_days: $json.client_initiated_days, ai_recommendation: $json.ai_recommendation }) }}",
+        "options": {}
+      },
+      "name": "Write to Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2230, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { done: true } }];"
+      },
+      "name": "Loop Back",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst allScores = staticData.allScores || [];\nstaticData.allScores = [];\n\nconst critical = allScores.filter(s => s.health_tier === 'Critical');\nconst atRisk = allScores.filter(s => s.health_tier === 'At Risk');\nconst monitor = allScores.filter(s => s.health_tier === 'Monitor');\nconst healthy = allScores.filter(s => s.health_tier === 'Healthy');\n\nreturn [{ json: {\n  totalClients: allScores.length,\n  criticalCount: critical.length,\n  atRiskCount: atRisk.length,\n  monitorCount: monitor.length,\n  healthyCount: healthy.length,\n  criticalClients: critical,\n  atRiskClients: atRisk,\n  monitorClients: monitor,\n  allScores: allScores\n} }];"
+      },
+      "name": "Aggregate Scores",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [690, 550]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst needsAttention = JSON.stringify({\n  critical: data.criticalClients,\n  atRisk: data.atRiskClients\n}).substring(0, 8000);\n\nconst prompt = 'You are a client success analyst for GM Baptist Outreach, a church SaaS platform. Analyze these platinum client health scores and provide actionable recommendations.\\n\\nScoring: 0-39 Critical, 40-59 At Risk, 60-79 Monitor, 80-100 Healthy.\\ndays_since_inbound = days since client last messaged us (-1 means never).\\nmessages_last_30d = total messages in last 30 days.\\nhas_active_campaign = whether they have a recent ad campaign.\\n\\nReturn JSON:\\n{\"executive_summary\": \"2-3 sentence overview of overall client health\", \"action_items\": [{\"name\": \"client name\", \"score\": N, \"tier\": \"...\", \"recommendation\": \"specific 1-sentence action to take\"}], \"trends\": \"1 sentence on what the data suggests about client retention\"}\\n\\nTotal clients: ' + data.totalClients + '\\nHealthy: ' + data.healthyCount + '\\nMonitor: ' + data.monitorCount + '\\nAt Risk: ' + data.atRiskCount + '\\nCritical: ' + data.criticalCount + '\\n\\nClients needing attention:\\n' + needsAttention;\n\nreturn [{ json: {\n  totalClients: data.totalClients,\n  criticalCount: data.criticalCount,\n  atRiskCount: data.atRiskCount,\n  monitorCount: data.monitorCount,\n  healthyCount: data.healthyCount,\n  requestBody: {\n    model: 'claude-sonnet-4-20250514',\n    max_tokens: 2000,\n    messages: [{ role: 'user', content: prompt }]\n  }\n} }];"
+      },
+      "name": "Prepare Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [910, 550]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "x-api-key", "value": "={{ $env.ANTHROPIC_API_KEY }}"},
+            {"name": "anthropic-version", "value": "2023-06-01"},
+            {"name": "Content-Type", "value": "application/json"}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
+        "options": {}
+      },
+      "name": "Claude Summary",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1130, 550]
+    },
+    {
+      "parameters": {
+        "jsCode": "const claudeResponse = $input.first().json;\nconst stats = $('Prepare Summary').first().json;\nlet report = {};\ntry {\n  const text = claudeResponse.content[0].text;\n  const match = text.match(/\\{[\\s\\S]*\\}/);\n  if (match) report = JSON.parse(match[0]);\n} catch (e) {\n  report = { error: 'Failed to parse', raw: claudeResponse.content && claudeResponse.content[0] ? claudeResponse.content[0].text : '' };\n}\n\nreturn [{ json: {\n  generatedAt: new Date().toISOString(),\n  totalClients: stats.totalClients,\n  healthy: stats.healthyCount,\n  monitor: stats.monitorCount,\n  atRisk: stats.atRiskCount,\n  critical: stats.criticalCount,\n  ...report\n} }];"
+      },
+      "name": "Format Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1350, 550]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {"node": "Get Platinum Contacts", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Get Platinum Contacts": {
+      "main": [
+        [
+          {"node": "Extract Contacts", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Extract Contacts": {
+      "main": [
+        [
+          {"node": "Loop Contacts", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Loop Contacts": {
+      "main": [
+        [
+          {"node": "Get Conversations", "type": "main", "index": 0}
+        ],
+        [
+          {"node": "Aggregate Scores", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Get Conversations": {
+      "main": [
+        [
+          {"node": "Process Conversations", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Process Conversations": {
+      "main": [
+        [
+          {"node": "Has Conversation?", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Has Conversation?": {
+      "main": [
+        [
+          {"node": "Get Messages", "type": "main", "index": 0}
+        ],
+        [
+          {"node": "Score Zero", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Get Messages": {
+      "main": [
+        [
+          {"node": "Calculate Score", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Calculate Score": {
+      "main": [
+        [
+          {"node": "Store Score", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Score Zero": {
+      "main": [
+        [
+          {"node": "Store Score", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Store Score": {
+      "main": [
+        [
+          {"node": "Write to Supabase", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Write to Supabase": {
+      "main": [
+        [
+          {"node": "Loop Back", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Loop Back": {
+      "main": [
+        [
+          {"node": "Loop Contacts", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Aggregate Scores": {
+      "main": [
+        [
+          {"node": "Prepare Summary", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Prepare Summary": {
+      "main": [
+        [
+          {"node": "Claude Summary", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Claude Summary": {
+      "main": [
+        [
+          {"node": "Format Report", "type": "main", "index": 0}
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
