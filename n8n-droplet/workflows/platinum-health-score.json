@@ -39,7 +39,7 @@
           "parameters": [
             {"name": "locationId", "value": "x7nLyDSHiewYRtwYlX0h"},
             {"name": "limit", "value": "100"},
-            {"name": "tag", "value": "platinum"}
+            {"name": "tag", "value": "platinum-hs"}
           ]
         },
         "sendHeaders": true,
@@ -51,7 +51,7 @@
         },
         "options": {"retry": {"maxTries": 3, "waitBetweenTries": 5000}}
       },
-      "name": "Get Platinum Contacts",
+      "name": "Get Platinum-HS Contacts",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [250, 300]
@@ -266,18 +266,18 @@
     "Webhook Trigger": {
       "main": [
         [
-          {"node": "Get Platinum Contacts", "type": "main", "index": 0}
+          {"node": "Get Platinum-HS Contacts", "type": "main", "index": 0}
         ]
       ]
     },
     "Schedule Trigger": {
       "main": [
         [
-          {"node": "Get Platinum Contacts", "type": "main", "index": 0}
+          {"node": "Get Platinum-HS Contacts", "type": "main", "index": 0}
         ]
       ]
     },
-    "Get Platinum Contacts": {
+    "Get Platinum-HS Contacts": {
       "main": [
         [
           {"node": "Extract Contacts", "type": "main", "index": 0}
