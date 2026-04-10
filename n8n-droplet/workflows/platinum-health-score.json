@@ -2,11 +2,34 @@
   "name": "Platinum Client Health Score",
   "nodes": [
     {
-      "parameters": {},
-      "name": "Manual Trigger",
-      "type": "n8n-nodes-base.manualTrigger",
-      "typeVersion": 1,
-      "position": [0, 300]
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "platinum-health-score",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 200],
+      "webhookId": "platinum-health-score"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtDay": 1,
+              "triggerAtHour": 2,
+              "field": "weeks"
+            }
+          ]
+        }
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 400]
     },
     {
       "parameters": {
@@ -240,7 +263,14 @@
     }
   ],
   "connections": {
-    "Manual Trigger": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {"node": "Get Platinum Contacts", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Schedule Trigger": {
       "main": [
         [
           {"node": "Get Platinum Contacts", "type": "main", "index": 0}
