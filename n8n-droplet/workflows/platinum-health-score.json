@@ -273,7 +273,12 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.requestBody) }}",
-        "options": {}
+        "options": {
+          "retry": {
+            "maxTries": 5,
+            "waitBetweenTries": 10000
+          }
+        }
       },
       "name": "Claude Summary",
       "type": "n8n-nodes-base.httpRequest",
