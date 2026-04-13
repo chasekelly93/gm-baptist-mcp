@@ -4,7 +4,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "platinum-health-score",
+        "path": "2f3f17fb-f50c-479f-8499-c49384f7d8b8",
         "responseMode": "lastNode",
         "options": {}
       },
@@ -12,7 +12,7 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [0, 200],
-      "webhookId": "platinum-health-score"
+      "webhookId": "2f3f17fb-f50c-479f-8499-c49384f7d8b8"
     },
     {
       "parameters": {
