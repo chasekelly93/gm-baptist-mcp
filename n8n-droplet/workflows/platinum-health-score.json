@@ -77,6 +77,34 @@
     },
     {
       "parameters": {
+        "jsCode": "const items = $input.all();\nconst ids = items.map(i => i.json.id).filter(Boolean);\nconst idList = ids.map(id => '\"' + id + '\"').join(',');\nconst url = 'https://xbxwvfnrqrjobalkmbeu.supabase.co/rest/v1/platinum_health_scores?contact_id=not.in.(' + idList + ')';\nreturn [{ json: { cleanupUrl: url, currentIdCount: ids.length } }];"
+      },
+      "name": "Prepare Cleanup",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [690, 100]
+    },
+    {
+      "parameters": {
+        "method": "DELETE",
+        "url": "={{ $json.cleanupUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "apikey", "value": "={{ $env.SUPABASE_SERVICE_KEY }}"},
+            {"name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_SERVICE_KEY }}"},
+            {"name": "Prefer", "value": "return=minimal"}
+          ]
+        },
+        "options": {}
+      },
+      "name": "Cleanup Stale Scores",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [910, 100]
+    },
+    {
+      "parameters": {
         "url": "https://services.leadconnectorhq.com/conversations/search",
         "sendQuery": true,
         "queryParameters": {
@@ -287,7 +315,15 @@
     "Extract Contacts": {
       "main": [
         [
-          {"node": "Loop Contacts", "type": "main", "index": 0}
+          {"node": "Loop Contacts", "type": "main", "index": 0},
+          {"node": "Prepare Cleanup", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Prepare Cleanup": {
+      "main": [
+        [
+          {"node": "Cleanup Stale Scores", "type": "main", "index": 0}
         ]
       ]
     },
