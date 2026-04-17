@@ -23,7 +23,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "https://YOUR-DO-APP-URL/sync",
+        "url": "https://gm-baptist-mcp-nytse.ondigitalocean.app/sync",
         "options": {
           "timeout": 30000,
           "response": {
