@@ -7,6 +7,7 @@ RUN npm ci --omit=dev
 
 COPY src/ ./src/
 COPY sync.js ./
+COPY seed-supabase.js ./
 
 EXPOSE 3000
 

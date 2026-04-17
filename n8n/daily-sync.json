@@ -39,6 +39,26 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://gm-baptist-mcp-nytse.ondigitalocean.app/seed-supabase",
+        "options": {
+          "timeout": 30000,
+          "response": {
+            "response": {
+              "fullResponse": false,
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "a1b2c3d4-0003-0003-0003-000000000003",
+      "name": "Seed Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300]
     }
   ],
   "connections": {
@@ -47,6 +67,17 @@
         [
           {
             "node": "Trigger Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Sync": {
+      "main": [
+        [
+          {
+            "node": "Seed Supabase",
             "type": "main",
             "index": 0
           }

@@ -6,6 +6,7 @@ const express = require("express");
 const { randomUUID } = require("node:crypto");
 const reportsRouter = require("./routes/reports");
 const syncRouter = require("./routes/sync");
+const seedSupabaseRouter = require("./routes/seed-supabase");
 const healthRouter = require("./routes/health");
 const { z } = require("zod");
 const {
@@ -532,6 +533,7 @@ function createServer() {
 // ── Routes ──
 app.use("/api", reportsRouter);
 app.use("/sync", syncRouter);
+app.use("/seed-supabase", seedSupabaseRouter);
 app.use("/health", healthRouter);
 
 // MCP GET — SSE stream for existing session
