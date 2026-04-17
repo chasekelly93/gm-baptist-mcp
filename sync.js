@@ -68,6 +68,15 @@ async function updateContactCustomField(contactId, locationId) {
   );
 }
 
+function hasLocationIdSet(contact) {
+  const fields = contact && contact.customFields;
+  if (!Array.isArray(fields)) return false;
+  const entry = fields.find((f) => f && f.id === CUSTOM_FIELD_ID);
+  if (!entry) return false;
+  const value = entry.value ?? entry.field_value;
+  return typeof value === "string" && value.trim().length > 0;
+}
+
 async function runSync() {
   console.log("[sync] started");
 
@@ -75,6 +84,7 @@ async function runSync() {
   const locations = allLocations.filter(isValidLocation);
   const total = locations.length;
   let updated = 0;
+  let alreadySet = 0;
   let skipped = 0;
 
   for (let i = 0; i < total; i++) {
@@ -94,6 +104,12 @@ async function runSync() {
         try {
           const contact = await findContactByEmail(email);
           if (contact && contact.id) {
+            if (hasLocationIdSet(contact)) {
+              console.log(`[sync] ${i + 1}/${total} ${loc.name} → ${email} → already set, skipping`);
+              alreadySet++;
+              matched = true;
+              break;
+            }
             await updateContactCustomField(contact.id, loc.id);
             console.log(`[sync] ${i + 1}/${total} ${loc.name} → ${email} → updated contact ${contact.id}`);
             updated++;
@@ -117,7 +133,7 @@ async function runSync() {
     await delay(800);
   }
 
-  console.log(`[sync] complete — ${updated} updated, ${skipped} skipped`);
+  console.log(`[sync] complete — ${updated} updated, ${alreadySet} already set, ${skipped} skipped`);
 }
 
 module.exports = { runSync };
