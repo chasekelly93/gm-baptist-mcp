@@ -47,7 +47,7 @@ function buildContactName(loc) {
 }
 
 async function insertClient(row) {
-  const { data } = await axios.post(`${SUPABASE_URL}/rest/v1/clients`, row, {
+  const { data } = await axios.post(`${SUPABASE_URL}/rest/v1/clients?on_conflict=token`, row, {
     headers: {
       apikey: SUPABASE_SERVICE_KEY,
       Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`,
