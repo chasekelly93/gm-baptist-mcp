@@ -1,182 +1,275 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase, ANALYZE_LOOM_WEBHOOK_URL } from "../lib/supabaseClient";
-import { useOrganization } from "../hooks/useOrganization";
-import { useCategories } from "../hooks/useCategories";
-import { useAuth } from "../hooks/useAuth";
-import type { AnalyzeLoomResponse } from "../lib/types";
+import { useAuth } from "@/components/AuthProvider";
+import { supabase } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { toast } from "sonner";
+import { Loader2, Wand2 } from "lucide-react";
+
+interface Category {
+  id: string;
+  name: string;
+}
 
 export function AddEditVideoPage() {
-  const { orgId } = useOrganization();
-  const { categories } = useCategories(orgId);
-  const { session } = useAuth();
+  const { orgId, user } = useAuth();
   const navigate = useNavigate();
 
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loomUrl, setLoomUrl] = useState("");
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Form state
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [categoryId, setCategoryId] = useState<string>("");
+  const [categoryId, setCategoryId] = useState("");
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+
+  // AI metadata
+  const [loomVideoId, setLoomVideoId] = useState<string | null>(null);
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null>(null);
+  const [aiRawSummary, setAiRawSummary] = useState<string | null>(null);
   const [aiGenerated, setAiGenerated] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!orgId) return;
+    supabase
+      .from("video_categories")
+      .select("id, name")
+      .eq("org_id", orgId)
+      .order("name")
+      .then(({ data }) => {
+        if (data) setCategories(data);
+      });
+  }, [orgId]);
 
   const handleAnalyze = async () => {
-    if (!loomUrl.trim() || !orgId) return;
-    setAnalyzing(true);
-    setError(null);
+    if (!loomUrl) {
+      toast.error("Please enter a Loom URL first");
+      return;
+    }
+
+    setIsAnalyzing(true);
     try {
-      const res = await fetch(ANALYZE_LOOM_WEBHOOK_URL, {
+      const response = await fetch("https://n8n.gmbaptistoutreach.com/webhook/analyze-loom-video", {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           loom_url: loomUrl,
-          category_names: categories.map((c) => c.name),
-        }),
+          category_names: categories.map(c => c.name)
+        })
       });
-      if (!res.ok) {
-        throw new Error(`n8n webhook returned ${res.status}`);
-      }
-      const data: AnalyzeLoomResponse = await res.json();
-      setTitle(data.title);
-      setDescription(data.description);
+
+      if (!response.ok) throw new Error("Failed to analyze video");
+
+      const data = await response.json();
+
+      setTitle(data.title || "");
+      setDescription(data.description || "");
+      setLoomVideoId(data.loom_video_id || null);
+      setThumbnailUrl(data.thumbnail_url || null);
+      setAiRawSummary(data.raw_summary || null);
       setAiGenerated(true);
-      // n8n returns the category by name (it only has what the frontend
-      // sent it, not slugs from the database), so match on name here.
-      const match = categories.find(
-        (c) => c.name === data.suggested_category,
-      );
-      if (match) setCategoryId(match.id);
+
+      if (data.suggested_category) {
+        const matched = categories.find(c => c.name.toLowerCase() === data.suggested_category.toLowerCase());
+        if (matched) {
+          setCategoryId(matched.id);
+          setIsCreatingCategory(false);
+        } else {
+          setCategoryId("new");
+          setNewCategoryName(data.suggested_category);
+          setIsCreatingCategory(true);
+        }
+      }
+
+      toast.success("Analysis complete! Review the draft below.");
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? `AI analysis failed: ${err.message}. You can still fill this in by hand.`
-          : "AI analysis failed. You can still fill this in by hand.",
-      );
+      toast.error("AI analysis failed. You can fill the details manually.");
+      console.error(err);
     } finally {
-      setAnalyzing(false);
+      setIsAnalyzing(false);
     }
   };
 
   const handleSave = async (status: "draft" | "published") => {
-    if (!orgId || !title.trim() || !loomUrl.trim()) return;
-    setSaving(true);
-    setError(null);
-    const { error: insertError } = await supabase.from("videos").insert({
-      org_id: orgId,
-      category_id: categoryId || null,
-      title: title.trim(),
-      description: description.trim() || null,
-      loom_url: loomUrl.trim(),
-      ai_generated: aiGenerated,
-      status,
-      created_by: session?.user.id ?? null,
-    });
-    setSaving(false);
-    if (insertError) {
-      setError(insertError.message);
+    if (!title || !loomUrl || !orgId) {
+      toast.error("Title and Loom URL are required");
       return;
     }
-    navigate("/");
+
+    setIsSaving(true);
+    try {
+      let finalCategoryId = categoryId;
+
+      // Handle new category creation
+      if (categoryId === "new" || isCreatingCategory) {
+        if (!newCategoryName) {
+          toast.error("Category name is required");
+          setIsSaving(false);
+          return;
+        }
+
+        const { data: newCat, error: catError } = await supabase
+          .from("video_categories")
+          .insert({
+            org_id: orgId,
+            name: newCategoryName,
+            slug: newCategoryName.toLowerCase().replace(/[^a-z0-9]+/g, "-")
+          })
+          .select()
+          .single();
+
+        if (catError) throw catError;
+        finalCategoryId = newCat.id;
+      }
+
+      // Generate a new UUID for the video
+      const videoId = crypto.randomUUID();
+
+      const { error } = await supabase.from("videos").insert({
+        id: videoId,
+        org_id: orgId,
+        title,
+        description,
+        loom_url: loomUrl,
+        category_id: finalCategoryId === "" || finalCategoryId === "new" ? null : finalCategoryId,
+        loom_video_id: loomVideoId,
+        thumbnail_url: thumbnailUrl,
+        ai_generated: aiGenerated,
+        ai_raw_summary: aiRawSummary,
+        status,
+        created_by: user?.id
+      });
+
+      if (error) throw error;
+
+      toast.success(`Video ${status === "published" ? "published" : "saved as draft"}!`);
+      navigate(status === "published" ? `/videos/${videoId}` : "/dashboard");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save video");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-5 px-6 py-8">
-      <h1 className="text-2xl font-bold">Add a video</h1>
+    <div className="container mx-auto p-6 max-w-3xl space-y-6">
+      <h1 className="text-3xl font-bold">Add Video</h1>
 
-      <label className="flex flex-col gap-1">
-        <span className="text-sm font-medium">Loom link</span>
-        <div className="flex gap-2">
-          <input
-            type="url"
-            value={loomUrl}
-            onChange={(e) => {
-              setLoomUrl(e.target.value);
-              setAiGenerated(false);
-            }}
-            placeholder="https://www.loom.com/share/…"
-            className="flex-1 rounded-md border border-gray-300 px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
-          />
-          <button
-            type="button"
-            onClick={handleAnalyze}
-            disabled={!loomUrl.trim() || analyzing}
-            className="rounded-md border border-indigo-600 px-3 py-2 text-sm text-indigo-600 disabled:opacity-50"
+      <Card>
+        <CardHeader>
+          <CardTitle>1. Source</CardTitle>
+          <CardDescription>Enter the Loom URL and let AI draft the details.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-3">
+            <Input
+              placeholder="https://www.loom.com/share/..."
+              value={loomUrl}
+              onChange={(e) => setLoomUrl(e.target.value)}
+              className="flex-1"
+            />
+            <Button
+              onClick={handleAnalyze}
+              disabled={isAnalyzing || !loomUrl}
+              variant="secondary"
+            >
+              {isAnalyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
+              Analyze with AI
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>2. Details</CardTitle>
+          <CardDescription>Review and edit the video details before saving.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="title">Title</Label>
+            <Input
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Video Title"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What is this video about?"
+              className="min-h-[120px]"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="category">Category</Label>
+            <select
+              id="category"
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              value={isCreatingCategory ? "new" : categoryId}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "new") {
+                  setIsCreatingCategory(true);
+                  setCategoryId("new");
+                } else {
+                  setIsCreatingCategory(false);
+                  setCategoryId(val);
+                }
+              }}
+            >
+              <option value="">Select a category...</option>
+              {categories.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+              <option value="new">+ Create new category</option>
+            </select>
+          </div>
+
+          {isCreatingCategory && (
+            <div className="space-y-2 pl-4 border-l-2 border-primary/20">
+              <Label htmlFor="newCategory">New Category Name</Label>
+              <Input
+                id="newCategory"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                placeholder="e.g. Sales Pipelines"
+              />
+            </div>
+          )}
+
+        </CardContent>
+        <CardFooter className="flex justify-end gap-3 border-t p-6">
+          <Button
+            variant="outline"
+            onClick={() => handleSave("draft")}
+            disabled={isSaving}
           >
-            {analyzing ? "Analyzing…" : "Analyze with AI"}
-          </button>
-        </div>
-      </label>
-
-      {error && <p className="text-sm text-red-500">{error}</p>}
-
-      <label className="flex flex-col gap-1">
-        <span className="text-sm font-medium">Title</span>
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => {
-            setTitle(e.target.value);
-            setAiGenerated(false);
-          }}
-          className="rounded-md border border-gray-300 px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
-        />
-      </label>
-
-      <label className="flex flex-col gap-1">
-        <span className="text-sm font-medium">Description</span>
-        <textarea
-          value={description}
-          onChange={(e) => {
-            setDescription(e.target.value);
-            setAiGenerated(false);
-          }}
-          rows={4}
-          className="rounded-md border border-gray-300 px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
-        />
-      </label>
-
-      <label className="flex flex-col gap-1">
-        <span className="text-sm font-medium">Category</span>
-        <select
-          value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-          className="rounded-md border border-gray-300 px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
-        >
-          <option value="">No category</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      {aiGenerated && (
-        <p className="text-xs text-gray-400">
-          Title and description were AI-drafted from the Loom link — review
-          before publishing.
-        </p>
-      )}
-
-      <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={() => handleSave("draft")}
-          disabled={saving || !title.trim() || !loomUrl.trim()}
-          className="rounded-md border border-gray-300 px-4 py-2 text-sm disabled:opacity-50 dark:border-gray-700"
-        >
-          Save as draft
-        </button>
-        <button
-          type="button"
-          onClick={() => handleSave("published")}
-          disabled={saving || !title.trim() || !loomUrl.trim()}
-          className="rounded-md bg-indigo-600 px-4 py-2 text-sm text-white disabled:opacity-50"
-        >
-          Publish
-        </button>
-      </div>
+            Save as Draft
+          </Button>
+          <Button
+            onClick={() => handleSave("published")}
+            disabled={isSaving}
+          >
+            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Publish Video
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   );
 }
