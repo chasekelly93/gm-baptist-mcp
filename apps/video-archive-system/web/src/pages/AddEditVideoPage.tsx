@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabaseClient";
+import { supabase, ANALYZE_LOOM_WEBHOOK_URL } from "../lib/supabaseClient";
 import { useOrganization } from "../hooks/useOrganization";
 import { useCategories } from "../hooks/useCategories";
 import { useAuth } from "../hooks/useAuth";
@@ -26,21 +26,27 @@ export function AddEditVideoPage() {
     setAnalyzing(true);
     setError(null);
     try {
-      const { data, error: fnError } =
-        await supabase.functions.invoke<AnalyzeLoomResponse>(
-          "analyze-loom-video",
-          { body: { loom_url: loomUrl, org_id: orgId } },
-        );
-      if (fnError) throw fnError;
-      if (data) {
-        setTitle(data.title);
-        setDescription(data.description);
-        setAiGenerated(true);
-        const match = categories.find(
-          (c) => c.slug === data.suggested_category,
-        );
-        if (match) setCategoryId(match.id);
+      const res = await fetch(ANALYZE_LOOM_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          loom_url: loomUrl,
+          category_names: categories.map((c) => c.name),
+        }),
+      });
+      if (!res.ok) {
+        throw new Error(`n8n webhook returned ${res.status}`);
       }
+      const data: AnalyzeLoomResponse = await res.json();
+      setTitle(data.title);
+      setDescription(data.description);
+      setAiGenerated(true);
+      // n8n returns the category by name (it only has what the frontend
+      // sent it, not slugs from the database), so match on name here.
+      const match = categories.find(
+        (c) => c.name === data.suggested_category,
+      );
+      if (match) setCategoryId(match.id);
     } catch (err) {
       setError(
         err instanceof Error

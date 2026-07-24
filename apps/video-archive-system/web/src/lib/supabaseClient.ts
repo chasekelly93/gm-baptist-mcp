@@ -18,3 +18,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export const DEFAULT_ORG_SLUG =
   (import.meta.env.VITE_DEFAULT_ORG_SLUG as string | undefined) ??
   "gm_baptist_outreach";
+
+// n8n webhook that drafts a title/description/category from a Loom link —
+// see apps/video-archive-system/README or the n8n workflow export for what
+// it expects/returns. NOTE: as of this build this points at n8n's
+// /webhook-test/ path, which only fires once while the n8n editor has
+// "Listen for test event" active. Swap to the /webhook/ (no "-test")
+// production URL once the workflow is activated in n8n.
+export const ANALYZE_LOOM_WEBHOOK_URL =
+  (import.meta.env.VITE_ANALYZE_LOOM_WEBHOOK_URL as string | undefined) ??
+  "https://n8n.gmbaptistoutreach.com/webhook-test/analyze-loom-video";
