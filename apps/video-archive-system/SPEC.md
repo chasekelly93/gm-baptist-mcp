@@ -3,8 +3,8 @@
 A searchable video knowledge base for cataloging Loom recordings, tracking which
 ones actually get used, and surfacing candidates for turning into full onboarding
 sessions. Built for GHL AI Studio as a React + TypeScript + Vite web app
-(Tailwind v4), backed by Supabase — see `web/` for the app and
-`supabase/functions/analyze-loom-video/` for the AI ingestion backend.
+(Tailwind v4), backed by Supabase — see `web/` for the app and an n8n
+workflow (§5) for the AI ingestion backend.
 
 > **Stack note:** an earlier draft of this spec assumed React Native/Expo.
 > GHL AI Studio's actual project scaffold is a Vite/React web SPA, so that's
@@ -70,53 +70,59 @@ minute, even under rapid double-clicks or retried requests. This makes the
 dedupe authoritative at the database level, not just a client-side debounce.
 
 `user_identifier` is `auth.uid()` for logged-in staff, or a persisted
-anonymous device UUID (stored in `localStorage`, see `web/src/lib/deviceId.ts`)
-for self-serve, unauthenticated visitors.
+anonymous device UUID (stored in `localStorage`, see the device-id helper in
+`web/src/lib/supabase.ts`) for self-serve, unauthenticated visitors.
 
 ## 5. AI ingestion flow ("paste a link, get a catalog entry")
 
 1. Staff pastes a Loom share URL into the "Add Video" screen and taps
    **Analyze with AI**.
-2. A Supabase Edge Function (`analyze-loom-video`):
+2. An n8n workflow (`Video Archive - Analyze Loom Video`, webhook at
+   `https://n8n.gmbaptistoutreach.com/webhook/analyze-loom-video`):
    - Fetches Loom's public oEmbed endpoint (`https://www.loom.com/v1/oembed?url=...`)
      for title, author, and thumbnail.
    - Fetches the Loom share page and reads `og:title` / `og:description` meta
      tags as a fallback/supplement (Loom's public oEmbed description is often
      empty).
-   - Sends that metadata to Claude (Anthropic API) with the org's existing
-     category list, asking for: a clean title, a 1–2 sentence description of
-     what the video covers and its use case, and a suggested category (or
-     "new category" if nothing fits).
-   - Returns the draft to the app — nothing is saved yet.
-3. Staff reviews the draft in the Add/Edit Video form, edits anything, picks
-   the final category, and saves. This also covers the "single install, just
-   fill in name/title/description and categorize" manual path — AI-assist is
-   optional, not required, on the same screen.
+   - Sends that metadata to Claude (Anthropic API, via an n8n "Header Auth"
+     credential holding `x-api-key`) along with the category names the
+     frontend sent it, asking for: a clean title, a 1–2 sentence description
+     of what the video covers and its use case, and a suggested category (by
+     name) or `null` if nothing fits.
+   - Returns the draft in the webhook response — nothing is saved yet.
+3. Staff reviews the draft in the Add Video form, edits anything, picks the
+   final category (matched by name against the org's categories), and saves.
+   This also covers the "single install, just fill in name/title/description
+   and categorize" manual path — AI-assist is optional, not required, on the
+   same screen.
 
-Env vars needed for this function: `SUPABASE_SERVICE_ROLE_KEY` (provided
-automatically to every Edge Function), `ANTHROPIC_API_KEY` (set via
-`supabase secrets set`). Implemented in
-`supabase/functions/analyze-loom-video/index.ts`.
+The n8n workflow holds the only secret this flow needs (`ANTHROPIC_API_KEY`,
+as a Header Auth credential) — it was chosen over a Supabase Edge Function so
+the automation layer lives alongside the org's other n8n workflows instead
+of split across two platforms.
 
 ## 6. Web app (Vite + React + TypeScript) — pages
 
-Implemented in `web/src/pages/`:
+Built by prompting GHL AI Studio directly (see `PROMPT.md` in this
+directory) rather than hand-writing files, so the exact file layout is
+whatever AI Studio's generator produces — the pages/routes below are the
+functional requirement, not a prescribed file tree:
 
-- **Search** (`/`) — search bar, category filter chips, results grid.
-  Public-facing, no login required (self-service).
+- **Search / home** (`/`) — search bar, category filter chips, results
+  grid. Public-facing, no login required (self-service).
 - **Video Detail** (`/videos/:videoId`) — title, description, category tag,
   thumbnail, and the **Copy Link** button (writes the click event and
   copies the Loom URL to clipboard).
 - **Add Video** (`/add`, staff-only) — Loom URL field, "Analyze with AI"
-  action, editable title/description, category picker, save as
+  action, editable title/description, category picker with an inline "add
+  new category" affordance (no separate Categories page needed), save as
   draft/published.
-- **Categories** (`/categories`, staff-only) — manage the taxonomy per org.
 - **Dashboard** (`/dashboard`, staff-only) — see §8.
 - **Staff Login** (`/staff-login`) — Supabase Auth magic link.
 
-Auth: Supabase Auth (magic link) gates the staff routes via the
-`RequireStaff` wrapper; Search and Video Detail use the anon key and RLS
-policies that only expose `status = 'published'` rows.
+Auth: Supabase Auth (magic link) gates the staff routes; Search and Video
+Detail use the anon key and RLS policies that only expose
+`status = 'published'` rows.
 
 ## 7. Phase 2 ideas (not building now)
 
@@ -152,15 +158,16 @@ Dashboard (staff-only) queries against `video_click_events`:
   already serves an unrelated live app. `schema.sql` has been applied there
   and verified (all 5 tables present, `organizations` seeded with
   `gm_baptist_outreach`).
-- GHL AI Studio has no API to drive from this repo, so the app is built
-  directly in `apps/video-archive-system/web/` and wired to GHL AI Studio
-  via its GitHub sync — point that sync at this subfolder (not the repo
-  root, which is the unrelated `gm-baptist-mcp` MCP server) once it's
-  configured.
+- GHL AI Studio has no API and no GitHub sync yet, so the app is built by
+  prompting AI Studio directly with `PROMPT.md` rather than hand-writing
+  files. `apps/video-archive-system/web/` in this repo holds a previously
+  hand-built reference implementation kept for comparison/backup — once AI
+  Studio adds GitHub sync, point it at this subfolder (not the repo root,
+  which is the unrelated `gm-baptist-mcp` MCP server) instead of prompting.
 - Env vars for `web/` (see `web/.env.example`): `VITE_SUPABASE_URL`,
   `VITE_SUPABASE_ANON_KEY` (public, client-side — safe to expose),
-  `VITE_DEFAULT_ORG_SLUG=gm_baptist_outreach`.
-- Secrets for the Edge Function (never shipped to the browser): set via
-  `supabase secrets set ANTHROPIC_API_KEY=... --project-ref xbxwvfnrqrjobalkmbeu`;
-  `SUPABASE_SERVICE_ROLE_KEY` is provided automatically. Deploy with
-  `supabase functions deploy analyze-loom-video --project-ref xbxwvfnrqrjobalkmbeu`.
+  `VITE_DEFAULT_ORG_SLUG=gm_baptist_outreach`,
+  `VITE_ANALYZE_LOOM_WEBHOOK_URL=https://n8n.gmbaptistoutreach.com/webhook/analyze-loom-video`.
+- The n8n workflow holds `ANTHROPIC_API_KEY` as a Header Auth credential —
+  never in the web app's env, since anything under `VITE_*` ships to the
+  browser.
