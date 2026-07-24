@@ -27,7 +27,7 @@ export function CopyLinkButton({
     <button
       type="button"
       onClick={handleCopy}
-      className="inline-flex items-center gap-2 rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+      className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:opacity-90"
     >
       {copied ? "Copied!" : "Copy Link"}
     </button>

@@ -95,8 +95,8 @@ export function DashboardPage() {
       <h1 className="text-2xl font-bold">Dashboard</h1>
 
       {onboardingCandidates.length > 0 && (
-        <section className="rounded-lg border border-brand/30 bg-brand/5 p-4">
-          <h2 className="font-semibold text-brand">
+        <section className="rounded-lg border border-indigo-600/30 bg-indigo-600/5 p-4">
+          <h2 className="font-semibold text-indigo-600">
             Onboarding session candidates
           </h2>
           <p className="mb-2 text-sm text-gray-500">

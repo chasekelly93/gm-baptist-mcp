@@ -16,7 +16,7 @@ export function CategoryChips({
         onClick={() => onSelect(null)}
         className={`rounded-full px-3 py-1 text-sm ${
           activeId === null
-            ? "bg-brand text-white"
+            ? "bg-indigo-600 text-white"
             : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
         }`}
       >
@@ -29,7 +29,7 @@ export function CategoryChips({
           onClick={() => onSelect(c.id)}
           className={`rounded-full px-3 py-1 text-sm ${
             activeId === c.id
-              ? "bg-brand text-white"
+              ? "bg-indigo-600 text-white"
               : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
           }`}
         >

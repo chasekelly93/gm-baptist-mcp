@@ -5,7 +5,7 @@ export function VideoCard({ video }: { video: VideoWithCategory }) {
   return (
     <Link
       to={`/videos/${video.id}`}
-      className="flex flex-col gap-2 rounded-lg border border-gray-200 p-4 hover:border-brand hover:shadow-sm dark:border-gray-700"
+      className="flex flex-col gap-2 rounded-lg border border-gray-200 p-4 hover:border-indigo-600 hover:shadow-sm dark:border-gray-700"
     >
       {video.thumbnail_url && (
         <img
@@ -16,7 +16,7 @@ export function VideoCard({ video }: { video: VideoWithCategory }) {
       )}
       <div className="flex items-center gap-2">
         {video.video_categories && (
-          <span className="rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">
+          <span className="rounded-full bg-indigo-600/10 px-2 py-0.5 text-xs font-medium text-indigo-600">
             {video.video_categories.name}
           </span>
         )}

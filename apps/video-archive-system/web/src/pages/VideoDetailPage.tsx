@@ -41,7 +41,7 @@ export function VideoDetailPage() {
       </Link>
 
       {video.video_categories && (
-        <span className="w-fit rounded-full bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">
+        <span className="w-fit rounded-full bg-indigo-600/10 px-2 py-0.5 text-xs font-medium text-indigo-600">
           {video.video_categories.name}
         </span>
       )}
@@ -67,7 +67,7 @@ export function VideoDetailPage() {
           href={video.loom_url}
           target="_blank"
           rel="noreferrer"
-          className="text-sm text-brand underline"
+          className="text-sm text-indigo-600 underline"
         >
           Open in Loom
         </a>

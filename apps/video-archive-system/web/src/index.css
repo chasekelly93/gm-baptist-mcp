@@ -1,9 +1,5 @@
 @import "tailwindcss";
 
-@theme {
-  --color-brand: #7c3aed;
-}
-
 body {
   margin: 0;
   color-scheme: light dark;

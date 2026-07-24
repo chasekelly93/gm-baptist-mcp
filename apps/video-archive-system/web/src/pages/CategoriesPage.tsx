@@ -47,7 +47,7 @@ export function CategoriesPage() {
           type="button"
           onClick={handleAdd}
           disabled={!name.trim()}
-          className="rounded-md bg-brand px-4 py-2 text-sm text-white disabled:opacity-50"
+          className="rounded-md bg-indigo-600 px-4 py-2 text-sm text-white disabled:opacity-50"
         >
           Add
         </button>

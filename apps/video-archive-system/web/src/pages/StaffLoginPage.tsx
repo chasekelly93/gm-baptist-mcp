@@ -33,7 +33,7 @@ export function StaffLoginPage() {
           />
           <button
             type="submit"
-            className="rounded-md bg-brand px-4 py-2 text-sm text-white"
+            className="rounded-md bg-indigo-600 px-4 py-2 text-sm text-white"
           >
             Send magic link
           </button>

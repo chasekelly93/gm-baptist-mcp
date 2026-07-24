@@ -24,7 +24,7 @@ export function NavBar() {
               to={link.to}
               className={
                 location.pathname === link.to
-                  ? "font-medium text-brand"
+                  ? "font-medium text-indigo-600"
                   : "text-gray-600 dark:text-gray-300"
               }
             >
