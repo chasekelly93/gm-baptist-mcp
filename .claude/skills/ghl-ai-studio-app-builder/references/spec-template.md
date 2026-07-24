@@ -1,12 +1,15 @@
 # {{App Name}}
 
-One or two sentences: what this app is and who it's for. Built as a React
-Native (Expo) app for GHL AI Studio, backed by Supabase.
+One or two sentences: what this app is and who it's for. Built for GHL AI
+Studio as a React + TypeScript + Vite web app (Tailwind), backed by
+Supabase — see `web/` for the app.
 
 Primary tenant: **{{org_name, e.g. GM Baptist Outreach}}**. The data model is
 multi-tenant from day one so {{other org, e.g. Automate South}} (or any
-future org) can run the same app on the same Supabase project without a
-schema migration — just a new `organizations` row and org-scoped data.
+future org) can run the same app without a schema migration — just a new
+`organizations` row and org-scoped data. (The Supabase *project* itself may
+still be dedicated to this app rather than shared — confirm per §9, don't
+assume.)
 
 ## 1. Problem
 
@@ -55,12 +58,12 @@ saved/published — don't auto-publish AI output. Note the env vars the flow
 needs (typically `SUPABASE_SERVICE_ROLE_KEY` and `ANTHROPIC_API_KEY` in an
 Edge Function).
 
-## 6. React Native app (Expo) — screens
+## 6. Web app (Vite + React + TypeScript) — pages
 
-Bullet list, one per screen, noting auth requirements:
+Bullet list, one per route, noting auth requirements:
 
-- **{{Screen name}}** — what it shows/does. {{Public or staff-only (requires
-  Supabase Auth)}}.
+- **{{Page name}}** (`{{route}}`) — what it shows/does. {{Public or
+  staff-only (requires Supabase Auth)}}.
 
 ## 7. Phase 2 ideas (not building now)
 
@@ -75,16 +78,18 @@ something more involved, where the content/data gaps are, etc).
 
 ## 9. GHL AI Studio / infra notes
 
-- Reuses the Supabase project already wired up for `gm-baptist-mcp`
-  (`SUPABASE_URL` / `SUPABASE_SERVICE_KEY` already exist in this repo's env)
-  — no new Supabase project needed, just this app's tables in `schema.sql`,
-  scoped by `org_id` so they never collide with other apps' tables or the
-  existing GHL sync data.
-- Ship as an Expo-based React Native app per GHL AI Studio's app model;
-  note here if any screens need `expo export:web` for embedding as a GHL
-  custom menu link/iframe.
-- Env vars for the app: `SUPABASE_URL`, `SUPABASE_ANON_KEY` (public,
-  client-side), `SUPABASE_SERVICE_ROLE_KEY` (Edge Functions only, never
-  shipped in the app bundle), plus any app-specific ones (e.g.
-  `ANTHROPIC_API_KEY` if there's an AI ingestion flow), and
-  `DEFAULT_ORG_SLUG={{org_slug}}` for this build.
+- **Which Supabase project**: name it explicitly here (project ref/URL) and
+  confirm it's actually accessible/correct before schema.sql is applied —
+  don't assume it's shared with `gm-baptist-mcp` or any other app in this
+  repo. State plainly if it's a dedicated project for this app.
+- GHL AI Studio has no API to drive from this repo — the app is built
+  directly in `apps/{{app-slug}}/web/` and wired to GHL AI Studio via its
+  GitHub sync. State here which subfolder that sync should point at (not
+  the repo root, which is the unrelated `gm-baptist-mcp` MCP server).
+- Env vars for `web/` (see `web/.env.example`): `VITE_SUPABASE_URL`,
+  `VITE_SUPABASE_ANON_KEY` (public, client-side — safe to expose),
+  `VITE_DEFAULT_ORG_SLUG={{org_slug}}`.
+- Secrets for any Edge Functions (never shipped to the browser):
+  `SUPABASE_SERVICE_ROLE_KEY` (provided automatically), plus any
+  app-specific ones (e.g. `ANTHROPIC_API_KEY`) set via `supabase secrets
+  set`.

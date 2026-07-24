@@ -2,7 +2,14 @@
 
 A searchable video knowledge base for cataloging Loom recordings, tracking which
 ones actually get used, and surfacing candidates for turning into full onboarding
-sessions. Built as a React Native (Expo) app for GHL AI Studio, backed by Supabase.
+sessions. Built for GHL AI Studio as a React + TypeScript + Vite web app
+(Tailwind v4), backed by Supabase — see `web/` for the app and
+`supabase/functions/analyze-loom-video/` for the AI ingestion backend.
+
+> **Stack note:** an earlier draft of this spec assumed React Native/Expo.
+> GHL AI Studio's actual project scaffold is a Vite/React web SPA, so that's
+> what's built here — routes/pages instead of native screens, but the data
+> model, RLS, and dedup logic below are unchanged.
 
 Primary tenant at launch: **GM Baptist Outreach**. The data model is multi-tenant
 from day one so **Automate South** (or any future org) can run the same app on
@@ -63,8 +70,8 @@ minute, even under rapid double-clicks or retried requests. This makes the
 dedupe authoritative at the database level, not just a client-side debounce.
 
 `user_identifier` is `auth.uid()` for logged-in staff, or a persisted
-anonymous device UUID (stored in `SecureStore`/`localStorage`) for self-serve,
-unauthenticated visitors.
+anonymous device UUID (stored in `localStorage`, see `web/src/lib/deviceId.ts`)
+for self-serve, unauthenticated visitors.
 
 ## 5. AI ingestion flow ("paste a link, get a catalog entry")
 
@@ -86,25 +93,30 @@ unauthenticated visitors.
    fill in name/title/description and categorize" manual path — AI-assist is
    optional, not required, on the same screen.
 
-Env vars needed for this function: `SUPABASE_SERVICE_ROLE_KEY`,
-`ANTHROPIC_API_KEY`.
+Env vars needed for this function: `SUPABASE_SERVICE_ROLE_KEY` (provided
+automatically to every Edge Function), `ANTHROPIC_API_KEY` (set via
+`supabase secrets set`). Implemented in
+`supabase/functions/analyze-loom-video/index.ts`.
 
-## 6. React Native app (Expo) — screens
+## 6. Web app (Vite + React + TypeScript) — pages
 
-- **Search / Home** — search bar, category filter chips, results list/grid.
+Implemented in `web/src/pages/`:
+
+- **Search** (`/`) — search bar, category filter chips, results grid.
   Public-facing, no login required (self-service).
-- **Video Detail** — title, description, category tag, thumbnail, embedded
-  Loom preview, and the **Copy Link** button (writes the click event and
+- **Video Detail** (`/videos/:videoId`) — title, description, category tag,
+  thumbnail, and the **Copy Link** button (writes the click event and
   copies the Loom URL to clipboard).
-- **Add / Edit Video** (staff-only, requires Supabase Auth) — Loom URL field,
-  "Analyze with AI" action, editable title/description, category picker
-  (with "add new category" inline), status (draft/published/archived).
-- **Categories** (staff-only) — manage the taxonomy per org.
-- **Dashboard** (staff-only) — see §8.
+- **Add Video** (`/add`, staff-only) — Loom URL field, "Analyze with AI"
+  action, editable title/description, category picker, save as
+  draft/published.
+- **Categories** (`/categories`, staff-only) — manage the taxonomy per org.
+- **Dashboard** (`/dashboard`, staff-only) — see §8.
+- **Staff Login** (`/staff-login`) — Supabase Auth magic link.
 
-Auth: Supabase Auth (magic link) gates the staff screens; Search and Video
-Detail use the anon key and RLS policies that only expose `status = 'published'`
-rows.
+Auth: Supabase Auth (magic link) gates the staff routes via the
+`RequireStaff` wrapper; Search and Video Detail use the anon key and RLS
+policies that only expose `status = 'published'` rows.
 
 ## 7. Phase 2 ideas (not building now)
 
@@ -135,15 +147,20 @@ Dashboard (staff-only) queries against `video_click_events`:
 
 ## 9. GHL AI Studio / infra notes
 
-- Reuses the Supabase project already wired up for `gm-baptist-mcp`
-  (`SUPABASE_URL` / `SUPABASE_SERVICE_KEY` already exist in this repo's env) —
-  no new Supabase project needed, just the new tables in `schema.sql`, scoped
-  by `org_id` so it never collides with the existing `clients` table or GHL
-  sync data.
-- Ship as an Expo-based React Native app per GHL AI Studio's app model;
-  Search/Video Detail can also run as `expo export:web` if it needs to be
-  embedded as a GHL custom menu link/iframe.
-- Env vars for the app: `SUPABASE_URL`, `SUPABASE_ANON_KEY` (public,
-  client-side), `SUPABASE_SERVICE_ROLE_KEY` (Edge Functions only, never
-  shipped in the app bundle), `ANTHROPIC_API_KEY` (Edge Function only),
-  `DEFAULT_ORG_SLUG=gm_baptist_outreach` for this build.
+- Uses its own dedicated Supabase project (`xbxwvfnrqrjobalkmbeu`) — separate
+  from the `gm-baptist-mcp` MCP server's Supabase project, since that one
+  already serves an unrelated live app. `schema.sql` has been applied there
+  and verified (all 5 tables present, `organizations` seeded with
+  `gm_baptist_outreach`).
+- GHL AI Studio has no API to drive from this repo, so the app is built
+  directly in `apps/video-archive-system/web/` and wired to GHL AI Studio
+  via its GitHub sync — point that sync at this subfolder (not the repo
+  root, which is the unrelated `gm-baptist-mcp` MCP server) once it's
+  configured.
+- Env vars for `web/` (see `web/.env.example`): `VITE_SUPABASE_URL`,
+  `VITE_SUPABASE_ANON_KEY` (public, client-side — safe to expose),
+  `VITE_DEFAULT_ORG_SLUG=gm_baptist_outreach`.
+- Secrets for the Edge Function (never shipped to the browser): set via
+  `supabase secrets set ANTHROPIC_API_KEY=... --project-ref xbxwvfnrqrjobalkmbeu`;
+  `SUPABASE_SERVICE_ROLE_KEY` is provided automatically. Deploy with
+  `supabase functions deploy analyze-loom-video --project-ref xbxwvfnrqrjobalkmbeu`.
