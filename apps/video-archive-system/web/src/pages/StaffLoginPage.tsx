@@ -1,45 +1,74 @@
 import { useState } from "react";
-import { useAuth } from "../hooks/useAuth";
+import { supabase } from "@/lib/supabase";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "sonner";
+import { useAuth } from "@/components/AuthProvider";
+import { Navigate } from "react-router-dom";
 
 export function StaffLoginPage() {
-  const { signInWithMagicLink } = useAuth();
   const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error: signInError } = await signInWithMagicLink(email);
-    if (signInError) setError(signInError.message);
-    else setSent(true);
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: window.location.origin + "/dashboard",
+      },
+    });
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      setSent(true);
+      toast.success("Magic link sent!");
+    }
+    setLoading(false);
   };
 
   return (
-    <div className="mx-auto flex max-w-sm flex-col gap-4 px-6 py-16">
-      <h1 className="text-xl font-bold">Staff sign in</h1>
-      {sent ? (
-        <p className="text-sm text-gray-500">
-          Check {email} for a magic link.
-        </p>
-      ) : (
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            className="rounded-md border border-gray-300 px-3 py-2 dark:border-gray-700 dark:bg-gray-900"
-          />
-          <button
-            type="submit"
-            className="rounded-md bg-indigo-600 px-4 py-2 text-sm text-white"
-          >
-            Send magic link
-          </button>
-          {error && <p className="text-sm text-red-500">{error}</p>}
-        </form>
-      )}
+    <div className="flex items-center justify-center min-h-[80vh] p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader>
+          <CardTitle>Staff Login</CardTitle>
+          <CardDescription>Sign in via magic link to manage videos.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {sent ? (
+            <div className="text-center space-y-4">
+              <p className="text-sm text-muted-foreground">
+                We sent a magic link to <strong>{email}</strong>. Check your inbox to sign in.
+              </p>
+              <Button variant="outline" onClick={() => setSent(false)}>
+                Try another email
+              </Button>
+            </div>
+          ) : (
+            <form onSubmit={handleLogin} className="space-y-4">
+              <Input
+                type="email"
+                placeholder="staff@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Sending..." : "Send Magic Link"}
+              </Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }
