@@ -1,12 +1,30 @@
-import type { ReactNode } from "react";
+import { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
-import { useAuth } from "../hooks/useAuth";
+import { useAuth } from "./AuthProvider";
+import { Loader2 } from "lucide-react";
 
-/** Gates staff-only routes (Add/Edit Video, Categories, Dashboard). */
 export function RequireStaff({ children }: { children: ReactNode }) {
-  const { isStaff, loading } = useAuth();
+  const { user, loading, orgError } = useAuth();
 
-  if (loading) return null;
-  if (!isStaff) return <Navigate to="/staff-login" replace />;
+  if (orgError) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh] text-destructive">
+        <p>Error loading organization: {orgError}</p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/staff-login" replace />;
+  }
+
   return <>{children}</>;
 }
